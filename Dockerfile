@@ -1,14 +1,11 @@
 FROM bropat/eufy-security-ws:latest
-
 RUN apk add --no-cache python3 py3-pip ffmpeg
 RUN pip3 install requests pytz --break-system-packages
-
 COPY main.py /app/main.py
 
-# Bridge ko PORT 3000 par force karenge aur 100s ka headstart denge
-RUN echo -e "#!/bin/sh\nexport PORT=3000\n/usr/local/bin/docker-entrypoint.sh & sleep 100 && python3 /app/main.py" > /app/start.sh
+# Startup: Port 8000 fix
+RUN echo -e "#!/bin/sh\n/usr/local/bin/docker-entrypoint.sh & sleep 60 && python3 /app/main.py" > /app/start.sh
 RUN chmod +x /app/start.sh
 
-EXPOSE 3000
-
+EXPOSE 8000
 CMD ["/app/start.sh"]
