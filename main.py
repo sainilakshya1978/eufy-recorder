@@ -49,7 +49,8 @@ while True:
         
         # FFmpeg recording: localhost:8000 ka use
         # -loglevel error taaki logs saaf rahein
-        status = os.system(f"ffmpeg -y -loglevel error -i {KOYEB_URL}/live_stream_link -t 30 -c copy {filename}")
+        # Purani line ki jagah ise use karein:
+        status = os.system(f"ffmpeg -y -loglevel error -i {KOYEB_URL}/live_stream_link -t 30 -c:v libx264 -preset ultrafast -crf 28 -c:a aac {filename}")
         
         if status == 0 and os.path.exists(filename):
             print("✅ Video capture ho gaya! Telegram par bhej raha hoon...")
