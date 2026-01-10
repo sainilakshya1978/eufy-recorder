@@ -9,11 +9,13 @@ RUN pip3 install requests pytz pyTelegramBotAPI --break-system-packages
 # 3. Copy main.py
 COPY main.py /app/main.py
 
-# 4. Startup Logic
-RUN echo -e "#!/bin/sh\n/usr/local/bin/docker-entrypoint.sh & sleep 30 && python3 /app/main.py" > /app/start.sh
+# 4. Modified Startup Logic (Added more sleep for stability)
+# Bridge ko start hone ke liye 60 seconds diye hain taaki "Connection Refused" error na aaye
+RUN echo -e "#!/bin/sh\n/usr/local/bin/docker-entrypoint.sh & sleep 60 && python3 /app/main.py" > /app/start.sh
 RUN chmod +x /app/start.sh
 
-# 5. Port 8000 expose karein (Koyeb dashboard par bhi yahi set karein)
+# 5. Port 8000 expose karein
+# Make sure Koyeb Dashboard par bhi yahi port set ho
 EXPOSE 8000
 
 CMD ["/app/start.sh"]
