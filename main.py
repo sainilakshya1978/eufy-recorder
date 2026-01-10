@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 import pytz
 
-# CONFIGURATION - Port 8000 Set kiya hai
+# CONFIGURATION: Aligning to Port 8000
 KOYEB_URL = "http://localhost:8000" 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -20,12 +20,11 @@ def send_to_telegram(video_path):
     except Exception as e:
         print(f"❌ Telegram Error: {e}")
 
-print("🚀 System Starting on Port 8000...")
+print("🚀 System Starting... Connecting to Port 8000...")
 
-# --- SUPER LOOP: Jab tak Port 8000 connect na ho, aage mat badho ---
+# --- WAIT LOOP: Keep trying until Port 8000 is ready ---
 while True:
     try:
-        # Check if bridge is ready
         requests.get(KOYEB_URL, timeout=5)
         print("🟢 Bridge (Port 8000) Connected Successfully!")
         break
@@ -37,7 +36,7 @@ while True:
 while True:
     now = datetime.now(IST)
     
-    # Keep-Alive Ping (Koyeb ko jagaye rakhne ke liye)
+    # Keep-Alive: Ping the server to keep the connection warm
     try:
         requests.get(KOYEB_URL, timeout=2)
     except:
@@ -46,14 +45,14 @@ while True:
     if 0 <= now.hour < 24: 
         filename = f"clip_{int(time.time())}.mp4"
         
-        # FFmpeg command pointing to Port 8000
+        # FFmpeg pointing to Port 8000
         status = os.system(f"ffmpeg -y -i {KOYEB_URL}/live_stream_link -t 30 -c copy {filename}")
         
         if status == 0 and os.path.exists(filename):
             send_to_telegram(filename)
-            time.sleep(300) # 5 Min Wait
+            time.sleep(300) # Wait 5 mins after a success
         else:
-            print("⚠️ Stream not available yet. Retrying in 60s...")
+            print("⚠️ Stream not ready. Retrying in 60s...")
             time.sleep(60)
     else:
         time.sleep(60)
