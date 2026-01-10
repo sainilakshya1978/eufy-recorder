@@ -1,19 +1,20 @@
 FROM bropat/eufy-security-ws:latest
 
-# Tools install karein
+# 1. Install Python, Pip and FFmpeg
 RUN apk add --no-cache python3 py3-pip ffmpeg
 
-# Libraries install karein
+# 2. Install Libraries
 RUN pip3 install requests pytz --break-system-packages
 
-# Script copy karein
+# 3. Copy main.py to /app
 COPY main.py /app/main.py
 
-# Startup: Bridge ko port 3000 par start karega aur 60s wait karega
-RUN echo -e "#!/bin/sh\n/usr/local/bin/docker-entrypoint.sh --port 3000 & sleep 60 && python3 /app/main.py" > /app/start.sh
+# 4. Create Startup Script (Fixing the --port error)
+# Hum environment variable PORT ka use karenge
+RUN echo -e "#!/bin/sh\nexport PORT=3000\n/usr/local/bin/docker-entrypoint.sh & sleep 60 && python3 /app/main.py" > /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Port 3000 expose karein
+# 5. Expose port 3000 for Koyeb
 EXPOSE 3000
 
 CMD ["/app/start.sh"]
