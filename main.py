@@ -27,7 +27,7 @@ while True:
     current_hour = now_ist.hour
 
     # Raat 12 AM se Subah 5 AM tak
-    if 0 <= current_hour < 5:
+    if 0 <= current_hour < 24:
         try:
             filename = f"eufy_{int(time.time())}.mp4"
             # FFmpeg clip recording
