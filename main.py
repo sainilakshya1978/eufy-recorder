@@ -20,12 +20,11 @@ def send_to_telegram(video_path):
     except Exception as e:
         print(f"❌ Telegram Error: {e}")
 
-print("🚀 Script start ho rahi hai... Bridge ka intezaar...")
+print("🚀 System start ho raha hai... Bridge ka intezaar...")
 
-# --- SMART WAIT LOOP ---
+# SMART WAIT LOOP: Jab tak server active nahi hota, intezaar karein
 while True:
     try:
-        # Hum check kar rahe hain ki kya localhost:3000 response de raha hai
         response = requests.get(KOYEB_URL, timeout=5)
         print("🟢 Bridge fully active ho gaya hai!")
         break
@@ -33,19 +32,15 @@ while True:
         print("⏳ Bridge abhi login kar raha hai... 10 seconds mein fir check karenge.")
         time.sleep(10)
 
-# Bridge ready hone ke baad recording shuru
 while True:
     now = datetime.now(IST)
-    if 0 <= now.hour < 24: # Testing ke liye 24 ghante rakha hai
+    if 0 <= now.hour < 24: 
         filename = f"clip_{int(time.time())}.mp4"
-        print(f"📸 Recording starting: {now.strftime('%H:%M:%S')}")
-        
         # FFmpeg command
         status = os.system(f"ffmpeg -y -i {KOYEB_URL}/live_stream_link -t 30 -c copy {filename}")
         
         if status == 0 and os.path.exists(filename):
             send_to_telegram(filename)
-            print("⏳ Agli recording 5 minute baad...")
             time.sleep(300) # 5 min ka gap
         else:
             print("⚠️ Stream abhi busy hai. 60 seconds mein retry...")
