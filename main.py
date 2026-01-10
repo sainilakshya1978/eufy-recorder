@@ -28,7 +28,7 @@ while True:
         filename = f"rec_{int(time.time())}.mp4"
         
         # FFmpeg recording
-        status = os.system(f"ffmpeg -y -i {KOYEB_URL}/live_stream_link -t 30 -c copy {filename}")
+        status = os.system(f"ffmpeg -y -loglevel error -i {KOYEB_URL}/live_stream_link -t 30 -c copy {filename}")
         
         if status == 0 and os.path.exists(filename):
             # Telegram code...
