@@ -26,7 +26,7 @@ while True:
 
     # Raat 12 AM (0) se Subah 5 AM (5) tak check karega
    # Testing ke liye abhi ka time (15 = 3 PM)
-    if 15 <= current_hour < 16:
+    if 0 <= current_hour < 5:
         try:
             # 1. Eufy Bridge se check karna ki koi movement hai ya nahi
             # (Note: Agar bridge direct stream de raha hai toh hum FFmpeg chalayenge)
