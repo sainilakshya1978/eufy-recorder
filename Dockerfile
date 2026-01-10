@@ -1,19 +1,20 @@
-# 1. Bridge ka image uthayein
 FROM bropat/eufy-security-ws:latest
 
-# 2. Python aur FFmpeg install karein
+# Python aur FFmpeg install karein
 RUN apk add --no-cache python3 py3-pip ffmpeg
 
-# 3. Python libraries install karein
+# Libraries install karein
 RUN pip3 install requests pytz --break-system-packages
 
-# 4. Apni script ko copy karein
+# Apni script copy karein
 COPY main.py /app/main.py
 
-# 5. Startup script (Path fix kiya gaya hai)
-# Yahan hum direct 'node dist/main.js' ya entrypoint use karenge
-RUN echo -e "#!/bin/sh\n/usr/local/bin/docker-entrypoint.sh & python3 /app/main.py" > /app/start.sh
+# Startup script jo dono ko ek sath chalaye
+# Hum Bridge ko background (&) mein chalayenge aur Python ko foreground mein
+RUN echo -e "#!/bin/sh\n/usr/local/bin/docker-entrypoint.sh & sleep 10 && python3 /app/main.py" > /app/start.sh
 RUN chmod +x /app/start.sh
 
-# 6. Run karein
+# Port 3000 expose karein
+EXPOSE 3000
+
 CMD ["/app/start.sh"]
