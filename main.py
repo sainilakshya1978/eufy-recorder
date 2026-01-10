@@ -6,9 +6,9 @@ import pytz # India time ke liye
 
 # CONFIGURATION
 # Ye values hum Koyeb ke Dashboard mein bharenge
-KOYEB_URL = os.getenv("KOYEB_BRIDGE_URL") 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+KOYEB_URL = os.getenv("surrounding-rat-lakshq-9a501b33.koyeb.app/") 
+BOT_TOKEN = os.getenv("8020697928:AAFAjLuDmG-DzFkHNlFhQxcvfyKQMHuqlLw")
+CHAT_ID = os.getenv("8553113399")
 IST = pytz.timezone('Asia/Kolkata')
 
 def send_to_telegram(video_path):
