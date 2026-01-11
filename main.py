@@ -2,46 +2,49 @@ import telebot
 import requests
 import time
 import os
+import websocket
+import json
+import threading
 
-# Environment Variables
+# Configuration
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-CHAT_ID = os.getenv('CHAT_ID') # 8553113399
-
+CHAT_ID = os.getenv('CHAT_ID') 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# 1. Keep Alive Logic (Koyeb ko sone se rokne ke liye)
+# 1. Keep Alive Logic
 def keep_alive():
-    try:
-        requests.get("http://localhost:8000/", timeout=5)
-    except:
-        pass
+    while True:
+        try:
+            requests.get("http://localhost:8000/", timeout=5)
+        except:
+            pass
+        time.sleep(45)
 
 # 2. Status Command
 @bot.message_handler(commands=['status'])
 def send_status(message):
-    status_text = (
-        "✅ System Status\n\n"
-        "🕒 Time: " + time.strftime("%H:%M:%S") + "\n"
-        "📡 Server: Online (Port 8000)\n"
-        "📸 Monitoring: Active (Photo + Video)"
-    )
-    bot.reply_to(message, status_text)
+    bot.reply_to(message, "✅ System Status: Online\n📸 Monitoring: Active (Real-time Events)")
 
-# 3. Motion Alert Logic (Photo + Video)
-# Yahan bridge ke events ko listen karne ka logic aayega
-def handle_motion_event(event_data):
-    # Pehle turant Photo bheje (Fast)
-    bot.send_message(CHAT_ID, "📸 Motion Detected! Processing video...")
-    # bot.send_photo(CHAT_ID, image_data) 
-    
-    # Phir Video Clip process karke bheje (Slight Delay)
-    # bot.send_video(CHAT_ID, video_data)
+# 3. Real Monitoring Logic (WebSocket)
+def on_message(ws, message):
+    data = json.loads(message)
+    # Check for Motion Event
+    if "event" in data and data["event"] == "device.event_added":
+        event_type = data["metadata"].get("event_type")
+        if event_type == "motion":
+            bot.send_message(CHAT_ID, "🚨 MOTION DETECTED! 🚨\nFetching Video/Image...")
+            # Note: Bridge automatically saves clips to its local folder.
+            # Real implementation needs to grab the latest MP4/JPG from the bridge API.
+
+def start_monitoring():
+    # Bridge Port 8000 se connect hona
+    ws = websocket.WebSocketApp("ws://localhost:8000", on_message=on_message)
+    ws.run_forever()
 
 if __name__ == "__main__":
-    print("Bot is starting...")
-    while True:
-        keep_alive() # Har loop mein heartbeat bheje
-        try:
-            bot.polling(none_stop=True, interval=0, timeout=20)
-        except Exception as e:
-            time.sleep(5)
+    print("Starting Heartbeat and Monitoring...")
+    # Background threads for stability
+    threading.Thread(target=keep_alive, daemon=True).start()
+    threading.Thread(target=start_monitoring, daemon=True).start()
+    
+    bot.polling(none_stop=True)
