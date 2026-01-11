@@ -1,60 +1,50 @@
-import telebot
-import os
-import websocket
-import json
-import time
+import telebot, os, websocket, json, threading, time
+from flask import Flask
 
-# 1. Configuration - Koyeb Variables se data uthayega
-BOT_TOKEN = os.getenv('BOT_TOKEN')
+# 1. Config
+bot = telebot.TeleBot(os.getenv('BOT_TOKEN'))
 CHAT_ID = os.getenv('CHAT_ID')
-bot = telebot.TeleBot(BOT_TOKEN)
+app = Flask(__name__)
 
-def handle_motion(device_sn):
-    print(f"🚨 ALERT: Motion detected on device {device_sn}")
+# 2. Minimal Flask (Koyeb Health Check ke liye)
+@app.route('/')
+def health(): return "Bot is Alive", 200
+
+def run_flask():
+    # Health check port 5000 par hi chalega
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+
+# 3. Motion Media Logic
+def send_media(sn):
     try:
-        # Step 1: Send Photo
-        img_url = f"http://127.0.0.1:8000/api/v1/devices/{device_sn}/last_image"
-        bot.send_photo(CHAT_ID, img_url, caption=f"🚨 Motion Detected!\nDevice: {device_sn}")
-        
-        # Step 2: Wait for video to process (15 seconds recommended for cloud)
-        print("⏳ Waiting for video clip...")
+        # Photo
+        bot.send_photo(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_image", caption="🚨 Motion!")
         time.sleep(15)
-        
-        # Step 3: Send Video
-        video_url = f"http://127.0.0.1:8000/api/v1/devices/{device_sn}/last_video"
-        bot.send_video(CHAT_ID, video_url, caption="🎥 Video Clip")
-        print("✅ Media sent successfully!")
-    except Exception as e:
-        print(f"❌ Media Error: {e}")
+        # Video
+        bot.send_video(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_video", caption="🎥 Clip")
+    except Exception as e: print(f"❌ Error: {e}")
 
-def on_message(ws, message):
-    data = json.loads(message)
-    # Check if the event is motion or person detection
-    msg_str = str(data).lower()
-    if data.get("type") == "event" and ("motion" in msg_str or "person" in msg_str):
-        device_sn = data.get("metadata", {}).get("serial_number")
-        if device_sn:
-            handle_motion(device_sn)
+# 4. WebSocket Connection
+def on_msg(ws, msg):
+    data = json.loads(msg)
+    if "motion" in str(data).lower():
+        sn = data.get("metadata", {}).get("serial_number")
+        if sn: threading.Thread(target=send_media, args=(sn,)).start()
 
-def start_bot():
-    # Eufy Driver ko login ke liye poora 1 minute dena zaroori hai
-    print("⏳ System initializing... Waiting 60s for Driver login...")
-    time.sleep(60) 
-    
+def start_ws():
     while True:
         try:
-            print("🔗 Attempting to connect to Eufy Bridge...")
-            ws = websocket.WebSocketApp(
-                "ws://127.0.0.1:8000",
-                on_message=on_message,
-                on_open=lambda ws: print("✅ SUCCESS: Connected to Eufy Camera Server!"),
-                on_error=lambda ws, e: print(f"⚠️ Connection Error: {e}")
-            )
+            ws = websocket.WebSocketApp("ws://127.0.0.1:8000", on_message=on_msg)
             ws.run_forever()
-        except Exception as e:
-            print(f"❌ Connection lost. Retrying in 10s... {e}")
-            time.sleep(10)
+        except: time.sleep(10)
 
 if __name__ == "__main__":
-    print("🤖 Eufy Telegram Bot is starting in Worker Mode...")
-    start_bot()
+    # Sabse pehle Flask start karo taaki Koyeb 'Healthy' dikhaye
+    threading.Thread(target=run_flask, daemon=True).start()
+    
+    print("⏳ Waiting 60s for Eufy Login...")
+    time.sleep(60)
+    
+    # Phir Bot start karo
+    threading.Thread(target=start_ws, daemon=True).start()
+    bot.polling(none_stop=True)
