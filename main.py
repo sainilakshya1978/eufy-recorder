@@ -59,4 +59,7 @@ if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
     threading.Thread(target=start_ws, daemon=True).start()
     print("🚀 Monitoring and Web Server Started...")
+    # Isse purane saare conflict khatam ho jayenge
+    bot.delete_webhook(drop_pending_updates=True)
+    time.sleep(1)
     bot.polling(none_stop=True)
