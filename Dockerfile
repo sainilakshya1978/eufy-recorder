@@ -5,9 +5,9 @@ RUN pip3 install pyTelegramBotAPI websocket-client flask --break-system-packages
 
 COPY main.py /app/main.py
 
-# Koyeb ko ye dono ports chahiye
+# Internal Ports
 EXPOSE 5000
 EXPOSE 8000
 
-# Driver start -> Wait -> Python Bot
-CMD ["/bin/sh", "-c", "/usr/local/bin/docker-entrypoint.sh & sleep 60 && python3 /app/main.py"]
+# Driver launch -> 60s sleep for Auth -> Bot start
+CMD ["/bin/sh", "-c", "/usr/local/bin/docker-entrypoint.sh & python3 /app/main.py"]
