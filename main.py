@@ -6,45 +6,52 @@ bot = telebot.TeleBot(os.getenv('BOT_TOKEN'))
 CHAT_ID = os.getenv('CHAT_ID')
 app = Flask(__name__)
 
-# 2. Minimal Flask (Koyeb Health Check ke liye)
 @app.route('/')
-def health(): return "Bot is Alive", 200
+def health(): return "OK", 200
 
 def run_flask():
-    # Health check port 5000 par hi chalega
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
 
-# 3. Motion Media Logic
+# 2. Telegram Status Handler (Turant kaam karega)
+@bot.message_handler(commands=['status'])
+def send_status(message):
+    bot.reply_to(message, "✅ Bot is Online!\n⏳ Eufy Bridge connecting in background...")
+
+# 3. Motion Logic
 def send_media(sn):
     try:
-        # Photo
         bot.send_photo(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_image", caption="🚨 Motion!")
         time.sleep(15)
-        # Video
         bot.send_video(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_video", caption="🎥 Clip")
-    except Exception as e: print(f"❌ Error: {e}")
+    except Exception as e: print(f"❌ Media Error: {e}")
 
-# 4. WebSocket Connection
+# 4. WebSocket (Bridge Connection)
 def on_msg(ws, msg):
     data = json.loads(msg)
     if "motion" in str(data).lower():
         sn = data.get("metadata", {}).get("serial_number")
         if sn: threading.Thread(target=send_media, args=(sn,)).start()
 
-def start_ws():
+def start_ws_loop():
+    print("⏳ Waiting 60s for Eufy Driver to finish login...")
+    time.sleep(60) # Sirf ye thread wait karega, bot nahi
     while True:
         try:
-            ws = websocket.WebSocketApp("ws://127.0.0.1:8000", on_message=on_msg)
+            print("🔗 Connecting to Eufy Bridge (Port 8000)...")
+            ws = websocket.WebSocketApp("ws://127.0.0.1:8000", 
+                                        on_message=on_msg,
+                                        on_open=lambda ws: print("✅ SUCCESS: Connected to Camera!"))
             ws.run_forever()
         except: time.sleep(10)
 
 if __name__ == "__main__":
-    # Sabse pehle Flask start karo taaki Koyeb 'Healthy' dikhaye
+    # Flask start (Koyeb Health Check)
     threading.Thread(target=run_flask, daemon=True).start()
     
-    print("⏳ Waiting 60s for Eufy Login...")
-    time.sleep(60)
+    # WebSocket Bridge (Background thread)
+    threading.Thread(target=start_ws_loop, daemon=True).start()
     
-    # Phir Bot start karo
-    threading.Thread(target=start_ws, daemon=True).start()
+    # Telegram Bot Polling (Main thread - Turant start hoga)
+    print("🤖 Telegram Bot Polling Started...")
+    bot.remove_webhook()
     bot.polling(none_stop=True)
