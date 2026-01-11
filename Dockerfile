@@ -1,21 +1,23 @@
 FROM bropat/eufy-security-ws:latest
 
-# Dependencies install karein
+# 1. Install Python and dependencies
 RUN apk add --no-cache python3 py3-pip ffmpeg
 
-# Virtual environment use karein (Best practice)
+# 2. Virtual Environment setup (System packages break hone se bachane ke liye)
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+
+# 3. Install Python Libraries
 RUN pip install pyTelegramBotAPI websocket-client flask
 
-# App directory setup
-WORKDIR /app
-COPY main.py /app/main.py
+# 4. Copy main.py to root (Isse Eufy ka folder structure kharab nahi hoga)
+COPY main.py /main.py
 
-# Ports
+# 5. Ports expose karein
 EXPOSE 5000
 EXPOSE 8000
 
-# ENTRYPOINT को reset karke seedha command chalayein
-ENTRYPOINT []
-CMD ["/bin/sh", "-c", "/usr/local/bin/docker-entrypoint.sh node src/bin/server.js & python3 /app/main.py"]
+# 6. Command
+# Hum 'dist/bin/server.js' use karenge jo sahi compiled file hai
+# 'sleep 10' ensure karega ki Node server pehle start ho
+CMD ["/bin/sh", "-c", "node dist/bin/server.js & sleep 10 && python3 /main.py"]
