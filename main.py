@@ -19,7 +19,7 @@ def home():
     return "<h1>✅ Eufy Bot is Active and Monitoring!</h1>", 200
 
 def run_flask():
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=5000)
 
 # 3. Motion Alert Logic
 def handle_motion(device_sn):
