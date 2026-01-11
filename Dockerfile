@@ -1,21 +1,21 @@
 FROM bropat/eufy-security-ws:latest
 
-# Build-time dependencies
+# Dependencies install karein
 RUN apk add --no-cache python3 py3-pip ffmpeg
 
-# Create virtual environment to avoid --break-system-packages issues
+# Virtual environment use karein (Best practice)
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install pyTelegramBotAPI websocket-client flask
 
-RUN pip3 install pyTelegramBotAPI websocket-client flask
-
+# App directory setup
+WORKDIR /app
 COPY main.py /app/main.py
 
+# Ports
 EXPOSE 5000
 EXPOSE 8000
 
-# Script create karein jo dono ko manage kare
-RUN echo "#!/bin/sh\n/usr/local/bin/docker-entrypoint.sh & \nsleep 10\npython3 /app/main.py" > /app/start.sh
-RUN chmod +x /app/start.sh
-
-CMD ["/app/start.sh"]
+# ENTRYPOINT को reset karke seedha command chalayein
+ENTRYPOINT []
+CMD ["/bin/sh", "-c", "/usr/local/bin/docker-entrypoint.sh node src/bin/server.js & python3 /app/main.py"]
