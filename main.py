@@ -1,121 +1,105 @@
-import telebot, os, websocket, json, threading, time
+import telebot, os, websocket, json, threading, time, socket
 from flask import Flask
 from datetime import datetime
 
 # --- Config ---
-# Environment variables load karein
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID')
-
-# Connection Settings
 WS_URL = "ws://127.0.0.1:8000"
 
+# Telegram Bot Setup
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-# --- Helper: Send Message to Telegram ---
+# --- Helper Functions ---
 def send_msg(text):
     try:
-        print(f"📤 TG Log: {text}")
+        print(f"📤 TG: {text}")
         bot.send_message(CHAT_ID, text, parse_mode="Markdown")
     except Exception as e:
-        print(f"❌ Telegram Error: {e}")
+        print(f"⚠️ TG Fail: {e}")
 
 # --- Flask Health Check ---
 @app.route('/')
 def health():
-    return "Online", 200
+    return "Running", 200
 
-# --- Alert Logic ---
+# --- Motion Alert ---
 def send_alert(sn):
-    timestamp = datetime.now().strftime('%H:%M:%S')
-    
-    # Step 1: Text Alert (Instant)
-    send_msg(f"🚨 **MOTION DETECTED!**\n📹 Camera: `{sn}`\n⏰ Time: `{timestamp}`")
-    
+    # Text Alert
+    send_msg(f"🚨 **MOTION DETECTED!**\n📹 Cam: `{sn}`\n⏰ {datetime.now().strftime('%H:%M:%S')}")
     try:
-        # Step 2: Image
-        # Thoda wait karein taaki camera image save kar le
-        time.sleep(2) 
-        img_url = f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_image"
-        bot.send_photo(CHAT_ID, img_url, caption="📸 Snapshot")
-        
-        # Step 3: Video
-        # Video process hone mein time lagta hai (15-20s)
+        time.sleep(2)
+        bot.send_photo(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_image", caption="📸 Snap")
         time.sleep(15)
-        vid_url = f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_video"
-        bot.send_video(CHAT_ID, vid_url, caption="🎥 Event Video")
-        
-    except Exception as e:
-        send_msg(f"⚠️ Media Error: `{e}`\n(Text alert sent successfully)")
+        bot.send_video(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_video", caption="🎥 Clip")
+    except: pass
 
-# --- WebSocket Listener ---
+# --- WebSocket Logic ---
 def on_message(ws, message):
     try:
         data = json.loads(message)
-
-        # A. Startup: Check Devices
+        
+        # Connection Success Message
         if data.get("type") == "result" and "devices" in data.get("result", {}):
-            devices = data["result"]["devices"]
-            count = len(devices)
-            names = ", ".join([d.get("name", "Unknown") for d in devices])
-            send_msg(f"✅ **Eufy Connected!**\nFound {count} Cameras: `{names}`")
+            devs = data["result"]["devices"]
+            names = ", ".join([d.get("name", "Unk") for d in devs])
+            send_msg(f"✅ **Eufy Bridge Connected!**\n📸 Cameras: `{names}`")
 
-        # B. Motion Event
+        # Motion Logic
         if data.get("type") == "event" and "event" in data:
             evt = data["event"]
-            evt_name = evt.get("name", "").lower()
-            
-            # Filter: Sirf Motion ya Person events
-            if "motion" in evt_name or "person" in evt_name:
+            if "motion" in evt.get("name", "").lower():
                 sn = evt.get("serialNumber")
-                if sn:
-                    print(f"👀 Motion seen on {sn}")
-                    threading.Thread(target=send_alert, args=(sn,)).start()
-
+                if sn: threading.Thread(target=send_alert, args=(sn,)).start()
     except Exception as e:
         print(f"JSON Error: {e}")
 
-def start_ws_loop():
-    # Node Driver ko start hone ka time dein
-    print("⏳ Waiting 20s for Driver...")
-    time.sleep(20)
+def start_ws():
+    # Pehle check karein ki port 8000 khula hai ya nahi
+    print("⏳ Waiting for Eufy Driver (Port 8000)...")
+    time.sleep(10)
     
     while True:
         try:
-            print("🔌 Connecting to Eufy Driver...")
-            ws = websocket.WebSocketApp(
-                WS_URL,
-                on_open=lambda ws: (
-                    send_msg("🔗 **Bridge Connected!** Fetching cameras..."),
-                    ws.send(json.dumps({"command": "device.get_devices", "messageId": "init"}))
-                ),
-                on_message=on_message,
-                on_error=lambda ws, err: print(f"WS Error: {err}")
-            )
-            ws.run_forever()
+            # Socket test
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            result = sock.connect_ex(('127.0.0.1', 8000))
+            sock.close()
+            
+            if result == 0:
+                print("🔌 Port 8000 Open! Connecting WS...")
+                ws = websocket.WebSocketApp(WS_URL,
+                    on_open=lambda ws: ws.send(json.dumps({"command": "device.get_devices", "messageId": "init"})),
+                    on_message=on_message)
+                ws.run_forever()
+            else:
+                print("❌ Port 8000 closed. Driver starting...")
+                time.sleep(5)
         except Exception as e:
-            print(f"WS Crash: {e}")
-        
-        print("🔄 Reconnecting WS in 10s...")
-        time.sleep(10)
+            print(f"WS Error: {e}")
+            time.sleep(10)
 
+# --- Main Thread ---
 if __name__ == "__main__":
-    # 1. Sabse pehle batao ki script zinda hai
-    send_msg("🚀 **System Restarted on Koyeb!**\nInitializing services...")
+    # 1. Startup Msg
+    send_msg("🚀 **New Instance Started!**\n⏳ Waiting 45s for old container to die (Fixing 409 Error)...")
 
-    # 2. Flask Thread (Port 5000)
+    # 2. Threads start karein (Ye background me chalenge)
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, use_reloader=False), daemon=True).start()
-    
-    # 3. WebSocket Thread
-    threading.Thread(target=start_ws_loop, daemon=True).start()
+    threading.Thread(target=start_ws, daemon=True).start()
 
-    # 4. Telegram Polling (Main Loop)
-    # 409 Conflict se bachne ke liye delay aur webhook removal
+    # 3. CRITICAL: 45 Second Wait for Old Container to Die
+    time.sleep(45)
+
+    # 4. Ab Polling shuru karein
+    print("🤖 Starting Telegram Polling...")
+    send_msg("🟢 **Bot Active!** Monitoring Motion now.")
+    
     try:
         bot.delete_webhook(drop_pending_updates=True)
-        time.sleep(2)
-        print("🤖 Bot Polling Started")
-        bot.polling(non_stop=True, interval=2)
+        # Interval badhane se CPU load kam hoga aur conflict kam honge
+        bot.polling(non_stop=True, interval=2, timeout=20)
     except Exception as e:
-        print(f"Polling Error: {e}")
+        print(f"Polling Crash: {e}")
+        time.sleep(10)
