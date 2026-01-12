@@ -1,44 +1,47 @@
 FROM bropat/eufy-security-ws:latest
 
-# 1. Install Python & Tools
+# 1. Install Tools
 RUN apk add --no-cache python3 py3-pip ffmpeg
 
-# 2. Virtual Env Setup
+# 2. Virtual Env
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# 3. Install Libraries
+# 3. Install Libs
 RUN pip install pyTelegramBotAPI websocket-client flask
 
-# 4. Copy Python Script
+# 4. Copy Main Script
 COPY main.py /main.py
 
-# 5. Startup Script (Fix for Config & Logs)
-#    Hum config file banayenge aur Node.js ko 'foreground' log mode mein chalayenge
+# 5. Create Config Generator Script (Python se banayenge taaki syntax error na ho)
+RUN echo 'import os, json' > /gen_config.py && \
+    echo 'config = {' >> /gen_config.py && \
+    echo '  "username": os.environ.get("USERNAME"),' >> /gen_config.py && \
+    echo '  "password": os.environ.get("PASSWORD"),' >> /gen_config.py && \
+    echo '  "country": "IN",' >> /gen_config.py && \
+    echo '  "language": "en",' >> /gen_config.py && \
+    echo '  "trustedDeviceName": "KoyebBot",' >> /gen_config.py && \
+    echo '  "acceptInvitations": True' >> /gen_config.py && \
+    echo '}' >> /gen_config.py && \
+    echo 'print("Generating config for:", config["username"])' >> /gen_config.py && \
+    echo 'with open("/usr/src/app/config.json", "w") as f:' >> /gen_config.py && \
+    echo '  json.dump(config, f)' >> /gen_config.py
+
+# 6. Startup Script
 RUN echo '#!/bin/sh' > /start.sh && \
     echo 'echo "-----------------------------------"' >> /start.sh && \
-    echo 'echo "Generating Config File..."' >> /start.sh && \
-    echo 'echo "{' >> /start.sh && \
-    echo '  \"username\": \"$USERNAME\",' >> /start.sh && \
-    echo '  \"password\": \"$PASSWORD\",' >> /start.sh && \
-    echo '  \"country\": \"IN\",' >> /start.sh && \
-    echo '  \"language\": \"en\",' >> /start.sh && \
-    echo '  \"trustedDeviceName\": \"KoyebBot\",' >> /start.sh && \
-    echo '  \"acceptInvitations\": true' >> /start.sh && \
-    echo '}" > /usr/src/app/config.json' >> /start.sh && \
+    echo 'python3 /gen_config.py' >> /start.sh && \
+    echo 'echo "Config created. Starting Driver..."' >> /start.sh && \
     echo 'echo "-----------------------------------"' >> /start.sh && \
-    echo 'echo "STARTING EUFY DRIVER (Watch logs carefully)..."' >> /start.sh && \
     echo 'node dist/bin/server.js &' >> /start.sh && \
-    echo 'echo "Waiting 20s for driver initialization..."' >> /start.sh && \
+    echo 'echo "Waiting 20s for driver..."' >> /start.sh && \
     echo 'sleep 20' >> /start.sh && \
     echo 'echo "Starting Python Bot..."' >> /start.sh && \
     echo 'python3 /main.py' >> /start.sh
 
 RUN chmod +x /start.sh
 
-# 6. Expose Ports
+# 7. Expose & Run
 EXPOSE 5000 8000
-
-# 7. Start
 ENTRYPOINT []
 CMD ["/start.sh"]
