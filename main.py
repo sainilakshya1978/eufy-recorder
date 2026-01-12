@@ -51,23 +51,29 @@ def on_message(ws, message):
     except Exception as e:
         print(f"JSON Error: {e}")
 
+ # (सिर्फ ws_loop फंक्शन को रिप्लेस करें, बाकी कोड सेम रखें)
+
 def start_ws():
-    print("⏳ Waiting for Port 8000...")
-    time.sleep(10)
+    print("⏳ Python waiting for Driver to initialize (Check logs above for Eufy errors)...")
+    # Pehle 30 second shant rahein taaki Eufy ke logs padh sakein
+    time.sleep(30) 
+    
     while True:
         try:
-            # Check if port is open
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             result = sock.connect_ex(('127.0.0.1', 8000))
             sock.close()
             
             if result == 0:
+                print("🔌 Port 8000 OPEN! Connecting WS...")
                 ws = websocket.WebSocketApp(WS_URL,
                     on_open=lambda ws: ws.send(json.dumps({"command": "device.get_devices", "messageId": "init"})),
                     on_message=on_message)
                 ws.run_forever()
             else:
-                print("❌ Driver not ready yet...")
+                # Sirf tab print karein jab connect na ho raha ho
+                # print("❌ Driver not ready yet...") -> Isko comment kar diya taaki spam na ho
+                pass
                 time.sleep(5)
         except:
             time.sleep(10)
