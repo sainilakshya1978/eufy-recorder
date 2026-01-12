@@ -58,7 +58,7 @@ def start_ws():
         except: time.sleep(10)
 
 if __name__ == "__main__":
-    send_msg("🚀 **Bot Started!**\nConnecting to Eufy...")
+    send_msg("🚀 **Bot Restarting...**")
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, use_reloader=False), daemon=True).start()
     threading.Thread(target=start_ws, daemon=True).start()
     time.sleep(40)
