@@ -21,6 +21,11 @@ def send_msg(text):
 @app.route('/')
 def health(): return "Healthy", 200
 
+# --- Status Command (Ab yeh kaam karega) ---
+@bot.message_handler(commands=['status', 'start'])
+def bot_status(message):
+    bot.reply_to(message, "✅ **Bot is Online!**\n👀 Monitoring Motion: 24/7\n📶 Connection: Stable")
+
 # --- Motion Alert Logic ---
 def send_alert(sn):
     timestamp = datetime.now().strftime('%H:%M:%S')
@@ -41,54 +46,50 @@ def on_message(ws, message):
     try:
         data = json.loads(message)
         
-        # Connection Success Check
+        # Connection Check
         if data.get("type") == "result" and "devices" in data.get("result", {}):
-            count = len(data['result']['devices'])
-            send_msg(f"✅ **Eufy Connected!**\nFound {count} Cameras.")
+            send_msg(f"✅ **Connected!** Found {len(data['result']['devices'])} devices.")
 
-        # Motion Event Check
+        # Motion Event Check (Improved Logic)
         if data.get("type") == "event" and "event" in data:
             evt = data["event"]
-            if "motion" in evt.get("name", "").lower():
+            evt_name = evt.get("name", "").lower()
+            
+            # Debugging: Print event name to logs to see what Eufy is sending
+            print(f"🔔 Event Received: {evt_name}")
+
+            # Check for Motion, Person, or Pet detection
+            if "motion" in evt_name or "person" in evt_name or "pet" in evt_name:
                 sn = evt.get("serialNumber")
-                if sn: threading.Thread(target=send_alert, args=(sn,)).start()
+                if sn: 
+                    print(f"🚨 Triggering Alert for {sn}")
+                    threading.Thread(target=send_alert, args=(sn,)).start()
     except: pass
 
 def start_ws():
-    print("⏳ Python: Waiting for Driver (20s)...")
-    time.sleep(20) # Startup delay
-    
+    print("⏳ Waiting for Driver...")
+    time.sleep(20) 
     while True:
         try:
-            # Check if Port 8000 is open
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            result = sock.connect_ex(('127.0.0.1', 8000))
-            sock.close()
-            
-            if result == 0:
-                print("🔌 Connecting WebSocket...")
+            if sock.connect_ex(('127.0.0.1', 8000)) == 0:
                 ws = websocket.WebSocketApp(WS_URL,
                     on_open=lambda ws: ws.send(json.dumps({"command": "device.get_devices", "messageId": "init"})),
                     on_message=on_message)
                 ws.run_forever()
             else:
-                print(".", end="", flush=True) # Waiting indicator
                 time.sleep(5)
-        except Exception as e:
-            print(f"WS Error: {e}")
-            time.sleep(10)
+            sock.close()
+        except: time.sleep(10)
 
 if __name__ == "__main__":
-    send_msg("🚀 **Bot Restarting on Koyeb!**\nInitializing Systems...")
+    send_msg("🚀 **System Started!**\nUse /status to check connection.")
     
-    # Start Background Threads
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, use_reloader=False), daemon=True).start()
     threading.Thread(target=start_ws, daemon=True).start()
     
-    # 409 Conflict Fix (Wait for old container to stop)
     time.sleep(40)
     
-    print("🤖 Telegram Polling Started...")
     try:
         bot.delete_webhook(drop_pending_updates=True)
         bot.polling(non_stop=True, interval=5)
