@@ -10,53 +10,44 @@ WS_URL = "ws://127.0.0.1:8000"
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-# --- Helper ---
-def send_msg(text):
-    try:
-        print(f"📤 TG: {text}")
-        bot.send_message(CHAT_ID, text, parse_mode="Markdown")
-    except Exception as e:
-        print(f"⚠️ TG Fail: {e}")
-
+# --- Flask Health ---
 @app.route('/')
 def health(): return "Running", 200
 
-# --- Alert Logic ---
+# --- Telegram Helper ---
+def send_msg(text):
+    try:
+        bot.send_message(CHAT_ID, text, parse_mode="Markdown")
+    except: pass
+
+# --- Motion Alert ---
 def send_alert(sn):
-    send_msg(f"🚨 **MOTION DETECTED!**\n📹 Cam: `{sn}`\n⏰ {datetime.now().strftime('%H:%M:%S')}")
+    send_msg(f"🚨 **MOTION!** Cam: `{sn}`")
     try:
         time.sleep(2)
-        bot.send_photo(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_image", caption="📸 Snap")
+        bot.send_photo(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_image")
         time.sleep(15)
-        bot.send_video(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_video", caption="🎥 Clip")
+        bot.send_video(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_video")
     except: pass
 
 # --- WebSocket ---
 def on_message(ws, message):
     try:
         data = json.loads(message)
-        
-        # Connection Success
         if data.get("type") == "result" and "devices" in data.get("result", {}):
-            devs = data["result"]["devices"]
-            names = ", ".join([d.get("name", "Unknown") for d in devs])
-            send_msg(f"✅ **Connected!**\n📹 Cameras: `{names}`")
-
-        # Motion Event
+            send_msg("✅ **System Online & Connected!**")
+        
         if data.get("type") == "event" and "event" in data:
             evt = data["event"]
             if "motion" in evt.get("name", "").lower():
                 sn = evt.get("serialNumber")
                 if sn: threading.Thread(target=send_alert, args=(sn,)).start()
-    except Exception as e:
-        print(f"JSON Error: {e}")
-
- # (सिर्फ ws_loop फंक्शन को रिप्लेस करें, बाकी कोड सेम रखें)
+    except: pass
 
 def start_ws():
-    print("⏳ Python waiting for Driver to initialize (Check logs above for Eufy errors)...")
-    # Pehle 30 second shant rahein taaki Eufy ke logs padh sakein
-    time.sleep(30) 
+    # 30 Second shant rahein taaki Driver ke logs dikhe
+    print("⏳ Python Paused: Watching Driver Logs...")
+    time.sleep(30)
     
     while True:
         try:
@@ -65,30 +56,25 @@ def start_ws():
             sock.close()
             
             if result == 0:
-                print("🔌 Port 8000 OPEN! Connecting WS...")
+                print("🔌 Port 8000 Open! Connecting...")
                 ws = websocket.WebSocketApp(WS_URL,
                     on_open=lambda ws: ws.send(json.dumps({"command": "device.get_devices", "messageId": "init"})),
                     on_message=on_message)
                 ws.run_forever()
             else:
-                # Sirf tab print karein jab connect na ho raha ho
-                # print("❌ Driver not ready yet...") -> Isko comment kar diya taaki spam na ho
-                pass
+                # Sirf ek dot (.) print karein taaki spam na ho
+                print(".", end="", flush=True) 
                 time.sleep(5)
         except:
             time.sleep(10)
 
 if __name__ == "__main__":
-    send_msg("🚀 **Instance Started!**\nWaiting 45s for conflict resolution...")
-    
+    send_msg("🚀 **Bot Restarting...**\nChecking Eufy Login Status...")
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, use_reloader=False), daemon=True).start()
     threading.Thread(target=start_ws, daemon=True).start()
-
-    time.sleep(45) # 409 Conflict Fix
     
-    print("🤖 Polling Started...")
+    time.sleep(40) # 409 Fix
     try:
         bot.delete_webhook(drop_pending_updates=True)
-        bot.polling(non_stop=True, interval=2)
-    except Exception as e:
-        print(f"Polling Error: {e}")
+        bot.polling(non_stop=True, interval=5)
+    except: pass
