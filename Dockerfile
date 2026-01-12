@@ -1,44 +1,44 @@
 FROM bropat/eufy-security-ws:latest
 
-# 1. Install Tools
+# 1. Install Python & Tools
 RUN apk add --no-cache python3 py3-pip ffmpeg
 
-# 2. Virtual Env
+# 2. Virtual Env Setup
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# 3. Install Libs
+# 3. Install Libraries
 RUN pip install pyTelegramBotAPI websocket-client flask
 
-# 4. Copy Main Script
+# 4. Copy Python Script
 COPY main.py /main.py
 
-# 5. Startup Script (With Debug Logging enabled)
-#    Humne "DEBUG=*" add kiya hai taaki Eufy ke errors dikh sakein
+# 5. Startup Script (Fix for Config & Logs)
+#    Hum config file banayenge aur Node.js ko 'foreground' log mode mein chalayenge
 RUN echo '#!/bin/sh' > /start.sh && \
-    echo 'echo "Creating config.json..."' >> /start.sh && \
+    echo 'echo "-----------------------------------"' >> /start.sh && \
+    echo 'echo "Generating Config File..."' >> /start.sh && \
     echo 'echo "{' >> /start.sh && \
     echo '  \"username\": \"$USERNAME\",' >> /start.sh && \
     echo '  \"password\": \"$PASSWORD\",' >> /start.sh && \
-    echo '  \"country\": \"$COUNTRY\",' >> /start.sh && \
+    echo '  \"country\": \"IN\",' >> /start.sh && \
     echo '  \"language\": \"en\",' >> /start.sh && \
-    echo '  \"trustedDeviceName\": \"${TRUSTED_DEVICE_NAME:-KoyebBot}\",' >> /start.sh && \
+    echo '  \"trustedDeviceName\": \"KoyebBot\",' >> /start.sh && \
     echo '  \"acceptInvitations\": true' >> /start.sh && \
     echo '}" > /usr/src/app/config.json' >> /start.sh && \
-    echo 'echo "--------------------------------------"' >> /start.sh && \
-    echo 'echo "STARTING EUFY DRIVER WITH LOGS..."' >> /start.sh && \
-    echo 'echo "--------------------------------------"' >> /start.sh && \
-    echo '# Node ko foreground me chalayenge thodi der logs dekhne ke liye' >> /start.sh && \
-    echo 'export DEBUG=eufy-security-client*' >> /start.sh && \
-    echo 'node dist/bin/server.js 2>&1 > /var/log/eufy_driver.log & ' >> /start.sh && \
-    echo 'tail -f /var/log/eufy_driver.log & ' >> /start.sh && \
-    echo 'sleep 10' >> /start.sh && \
-    echo 'echo "Starting Python Logic..."' >> /start.sh && \
+    echo 'echo "-----------------------------------"' >> /start.sh && \
+    echo 'echo "STARTING EUFY DRIVER (Watch logs carefully)..."' >> /start.sh && \
+    echo 'node dist/bin/server.js &' >> /start.sh && \
+    echo 'echo "Waiting 20s for driver initialization..."' >> /start.sh && \
+    echo 'sleep 20' >> /start.sh && \
+    echo 'echo "Starting Python Bot..."' >> /start.sh && \
     echo 'python3 /main.py' >> /start.sh
 
 RUN chmod +x /start.sh
 
+# 6. Expose Ports
 EXPOSE 5000 8000
 
+# 7. Start
 ENTRYPOINT []
 CMD ["/start.sh"]
