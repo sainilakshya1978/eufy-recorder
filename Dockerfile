@@ -1,6 +1,6 @@
 FROM bropat/eufy-security-ws:latest
 
-# 1. Install Python, pip, ffmpeg
+# 1. Install Python and dependencies
 RUN apk add --no-cache python3 py3-pip ffmpeg
 
 # 2. Setup Virtual Environment
@@ -13,7 +13,7 @@ RUN pip install pyTelegramBotAPI websocket-client flask
 # 4. Copy Main Script
 COPY main.py /main.py
 
-# 5. Create Config Generator (Python Script to avoid JSON Syntax Errors)
+# 5. Create Config Generator (Python Script)
 #    Yeh script environment variables se clean config.json banayegi
 RUN echo 'import os, json' > /gen_config.py && \
     echo 'config = {' >> /gen_config.py && \
