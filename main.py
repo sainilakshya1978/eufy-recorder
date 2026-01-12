@@ -1,11 +1,15 @@
 import telebot, os, websocket, json, threading, time, socket
+import urllib.request # Media download karne ke liye
 from flask import Flask
 from datetime import datetime
 
 # --- Config ---
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID')
-WS_URL = "ws://127.0.0.1:8000"
+
+# FIX: Driver Port 3000 par chalta hai, 8000 par nahi
+WS_URL = "ws://127.0.0.1:3000"
+API_URL = "http://127.0.0.1:3000"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
@@ -13,7 +17,6 @@ app = Flask(__name__)
 # --- Helper ---
 def send_msg(text):
     try:
-        print(f"📤 TG: {text}")
         bot.send_message(CHAT_ID, text, parse_mode="Markdown")
     except Exception as e:
         print(f"⚠️ TG Error: {e}")
@@ -21,69 +24,83 @@ def send_msg(text):
 @app.route('/')
 def health(): return "Healthy", 200
 
-# --- Status Command (Ab yeh kaam karega) ---
+# --- Status Command ---
 @bot.message_handler(commands=['status', 'start'])
 def bot_status(message):
-    bot.reply_to(message, "✅ **Bot is Online!**\n👀 Monitoring Motion: 24/7\n📶 Connection: Stable")
+    bot.reply_to(message, "✅ **System Online!**\n📹 Connected to Port 3000\n👀 Monitoring Motion")
 
 # --- Motion Alert Logic ---
 def send_alert(sn):
+    # 1. Text Alert
     timestamp = datetime.now().strftime('%H:%M:%S')
     send_msg(f"🚨 **MOTION DETECTED!**\n📹 Cam: `{sn}`\n⏰ Time: `{timestamp}`")
     
+    # 2. Media Sending (Updated Logic: Download first, then send)
     try:
         # Photo
         time.sleep(2)
-        bot.send_photo(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_image", caption="📸 Snapshot")
-        # Video
-        time.sleep(15)
-        bot.send_video(CHAT_ID, f"http://127.0.0.1:8000/api/v1/devices/{sn}/last_video", caption="🎥 Clip")
+        url = f"{API_URL}/api/v1/devices/{sn}/last_image"
+        # URL se direct download karke Telegram ko bhejein
+        with urllib.request.urlopen(url) as response:
+            data = response.read()
+            bot.send_photo(CHAT_ID, data, caption="📸 Snapshot")
     except Exception as e:
-        print(f"⚠️ Media Error: {e}")
+        print(f"❌ Image Error: {e}")
+
+    try:
+        # Video
+        time.sleep(15) # Video processing time
+        url = f"{API_URL}/api/v1/devices/{sn}/last_video"
+        with urllib.request.urlopen(url) as response:
+            data = response.read()
+            bot.send_video(CHAT_ID, data, caption="🎥 Clip")
+    except Exception as e:
+        print(f"❌ Video Error: {e}")
 
 # --- WebSocket Listener ---
 def on_message(ws, message):
     try:
         data = json.loads(message)
         
-        # Connection Check
+        # Connection Success
         if data.get("type") == "result" and "devices" in data.get("result", {}):
-            send_msg(f"✅ **Connected!** Found {len(data['result']['devices'])} devices.")
+            count = len(data['result']['devices'])
+            send_msg(f"✅ **Connected to Eufy Driver!**\nFound {count} Cameras.")
 
-        # Motion Event Check (Improved Logic)
+        # Motion Event
         if data.get("type") == "event" and "event" in data:
             evt = data["event"]
-            evt_name = evt.get("name", "").lower()
-            
-            # Debugging: Print event name to logs to see what Eufy is sending
-            print(f"🔔 Event Received: {evt_name}")
-
-            # Check for Motion, Person, or Pet detection
-            if "motion" in evt_name or "person" in evt_name or "pet" in evt_name:
+            if "motion" in evt.get("name", "").lower():
                 sn = evt.get("serialNumber")
-                if sn: 
-                    print(f"🚨 Triggering Alert for {sn}")
-                    threading.Thread(target=send_alert, args=(sn,)).start()
+                if sn: threading.Thread(target=send_alert, args=(sn,)).start()
     except: pass
 
 def start_ws():
-    print("⏳ Waiting for Driver...")
+    print("⏳ Python: Waiting for Driver (Port 3000)...")
     time.sleep(20) 
+    
     while True:
         try:
+            # FIX: Check Port 3000 (Not 8000)
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            if sock.connect_ex(('127.0.0.1', 8000)) == 0:
+            result = sock.connect_ex(('127.0.0.1', 3000))
+            sock.close()
+            
+            if result == 0:
+                print("🔌 Connecting to Port 3000...")
                 ws = websocket.WebSocketApp(WS_URL,
                     on_open=lambda ws: ws.send(json.dumps({"command": "device.get_devices", "messageId": "init"})),
                     on_message=on_message)
                 ws.run_forever()
             else:
+                print(".", end="", flush=True)
                 time.sleep(5)
-            sock.close()
-        except: time.sleep(10)
+        except Exception as e:
+            print(f"WS Error: {e}")
+            time.sleep(10)
 
 if __name__ == "__main__":
-    send_msg("🚀 **System Started!**\nUse /status to check connection.")
+    send_msg("🚀 **Bot Updated!**\nFixing Port & Media issues...")
     
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, use_reloader=False), daemon=True).start()
     threading.Thread(target=start_ws, daemon=True).start()
@@ -93,5 +110,4 @@ if __name__ == "__main__":
     try:
         bot.delete_webhook(drop_pending_updates=True)
         bot.polling(non_stop=True, interval=5)
-    except Exception as e:
-        print(f"Polling Error: {e}")
+    except: pass
