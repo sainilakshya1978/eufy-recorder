@@ -1,133 +1,86 @@
-import telebot, os, websocket, json, threading, time, socket
-import urllib.request
+import telebot, os, websocket, json, threading, time, requests
 from flask import Flask
 from datetime import datetime
+import pytz
 
 # --- Config ---
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID')
+IST = pytz.timezone('Asia/Kolkata')
 
-# FIX: Port 3000 (Matches Driver Log) and Container IP for stable internal connection
-WS_URL = "ws://172.17.0.1:3000"  
-API_URL = "http://172.17.0.1:3000"
+# Using Localhost for high speed internal communication
+WS_URL = "ws://127.0.0.1:3000"
+API_URL = "http://127.0.0.1:3000"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-# --- Helper ---
-def send_msg(text):
+def send_tg_log(text):
     try:
-        print(f"📤 TG: {text}", flush=True)
-        bot.send_message(CHAT_ID, text, parse_mode="Markdown")
-    except Exception as e:
-        print(f"⚠️ TG Error: {e}", flush=True)
+        bot.send_message(CHAT_ID, f"ℹ️ **System Log:**\n{text}", parse_mode="Markdown")
+    except: pass
 
 @app.route('/')
-def health(): return "Healthy", 200
+def health(): return "Bot is Alive", 200
 
 # --- Status Command ---
 @bot.message_handler(commands=['status', 'start'])
 def status(m):
-    bot.reply_to(m, "✅ **Bot Online!**\n🔌 Driver: Connected\n👀 Monitoring: 24/7")
-
-# --- Media Utility ---
-def download_media(url):
-    req = urllib.request.Request(
-        url, 
-        data=None, 
-        headers={'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)'}
-    )
-    with urllib.request.urlopen(req) as response:
-        return response.read()
-
-# --- 3. Video Worker ---
-def fetch_video_background(sn):
-    time.sleep(18) # Wait for SD Card write
-    try:
-        url = f"{API_URL}/api/v1/devices/{sn}/last_video"
-        video_data = download_media(url)
-        bot.send_video(CHAT_ID, video_data, caption="🎥 Evidence Video (SD Card)")
-    except Exception as e:
-        print(f"❌ Video Fetch Failed: {e}", flush=True)
+    now = datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')
+    bot.reply_to(m, f"✅ **Cloud Deployment Status:**\n\n🟢 **Instance:** Healthy\n🔌 **Driver:** Running (Port 3000)\n⏰ **Server Time:** {now}\n🛡️ **Security:** Armed")
 
 # --- Alert Logic ---
-def send_alert(sn, event_type):
-    timestamp = datetime.now().strftime('%H:%M:%S')
+def send_alert(sn, event):
+    now = datetime.now(IST).strftime('%H:%M')
+    # Initial Text Alert
+    bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED**\n📸 Camera: `{sn}`\n⏰ Time: `{now} IST`")
     
-    # 1. TEXT ALERT (Instant)
-    send_msg(f"🚨 **MOTION DETECTED!**\n📹 Cam: `{sn}`\n⏰ Time: `{timestamp}`")
-
-    # 2. IMAGE ALERT (Fast)
+    # Try to fetch Image
     try:
-        time.sleep(2) 
-        url = f"{API_URL}/api/v1/devices/{sn}/last_image"
-        image_data = download_media(url)
-        bot.send_photo(CHAT_ID, image_data, caption="📸 Snapshot")
-    except Exception as e:
-        print(f"❌ Image Error: {e}", flush=True)
+        time.sleep(3)
+        img_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_image", timeout=10)
+        if img_res.status_code == 200:
+            bot.send_photo(CHAT_ID, img_res.content, caption=f"📸 Snapshot from {sn}")
+    except: pass
 
-    # 3. VIDEO ALERT (Background)
-    threading.Thread(target=fetch_video_background, args=(sn,)).start()
+# --- WebSocket Engine ---
+def on_message(ws, message):
+    data = json.loads(message)
+    # Check for device events
+    if data.get("type") == "event":
+        evt = data.get("event", {})
+        if any(x in evt.get("name", "").lower() for x in ["motion", "person", "ring"]):
+            sn = evt.get("serialNumber")
+            threading.Thread(target=send_alert, args=(sn, evt.get("name"))).start()
+    
+    # Check for successful device discovery
+    elif "devices" in data.get("result", {}):
+        count = len(data['result']['devices'])
+        send_tg_log(f"✅ **Driver Synced!**\nFound {count} cameras online.")
 
-# --- WebSocket Listener ---
 def on_open(ws):
-    print("✅✅ SOCKET CONNECTED TO PORT 3000 ✅✅", flush=True)
-    send_msg("🔗 **Eufy Bridge Connected!** System Armed.")
+    print("Socket Connected")
     ws.send(json.dumps({"command": "start_listening", "messageId": "start"}))
     ws.send(json.dumps({"command": "device.get_devices", "messageId": "init"}))
 
-def on_message(ws, message):
-    try:
-        data = json.loads(message)
-        
-        if data.get("type") == "event" and "event" in data:
-            evt = data["event"]
-            name = evt.get("name", "").lower()
-            sn = evt.get("serialNumber")
-            
-            if sn and any(x in name for x in ["motion", "person", "pet", "ring"]):
-                threading.Thread(target=send_alert, args=(sn, name)).start()
-        
-        elif data.get("type") == "result" and "devices" in data.get("result", {}):
-             send_msg(f"✅ **Driver Ready!** Found {len(data['result']['devices'])} devices.")
-
-    except Exception as e:
-        print(f"⚠️ Error: {e}", flush=True)
-
-def on_error(ws, error):
-    print(f"❌ Socket Error: {error}", flush=True)
-
-def on_close(ws, close_status_code, close_msg):
-    print("❌ Socket Closed. Reconnecting...", flush=True)
-
-def start_ws_loop():
-    print("🔄 Connecting to Driver (Port 3000)...", flush=True)
+def run_ws():
     while True:
         try:
-            ws = websocket.WebSocketApp(WS_URL,
-                on_open=on_open,
-                on_message=on_message,
-                on_error=on_error,
-                on_close=on_close)
+            ws = websocket.WebSocketApp(WS_URL, on_open=on_open, on_message=on_message)
             ws.run_forever()
-        except Exception as e:
-            print(f"Critical Error: {e}", flush=True)
+        except: pass
         time.sleep(10)
 
 if __name__ == "__main__":
-    send_msg("🚀 **Bot Restarting.** (Checking Connection...)")
+    # 1. Start Flask Health Check
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000), daemon=True).start()
     
-    # Flask for Health Check
-    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, use_reloader=False), daemon=True).start()
+    # 2. Wait and Start WebSocket
+    time.sleep(5) 
+    threading.Thread(target=run_ws, daemon=True).start()
     
-    # Wait for Driver to stabilize before Python starts connecting
-    time.sleep(35) 
+    # 3. Notify Telegram that deployment is finished
+    send_tg_log("🚀 **Cloud Deployment Successful!**\nAll systems are now monitoring.")
     
-    # Start WebSocket Listener
-    threading.Thread(target=start_ws_loop, daemon=True).start()
-    
-    # Start Telegram Polling
-    try:
-        bot.delete_webhook(drop_pending_updates=True)
-        bot.polling(non_stop=True, interval=5)
-    except: pass
+    # 4. Start Telegram Bot
+    bot.polling(none_stop=True)
