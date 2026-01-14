@@ -14,42 +14,45 @@ bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
 @app.route('/')
-def health(): return "Ready for Test", 200
+def health(): return "Ready for 23:03 Test", 200
 
 def trigger_live_test():
-    sn = "T8W11P40240109D4" # Aapka Camera SN
-    file_name = "test_2257.mp4"
+    sn = "T8W11P40240109D4"
+    file_name = "test_2303.mp4"
     
-    bot.send_message(CHAT_ID, "🚀 **CRITICAL TEST START (22:57):** Final attempt for Live Video...")
+    bot.send_message(CHAT_ID, "🚀 **FINAL TEST START (23:03):** Handshaking with Driver...")
 
     try:
-        # 1. Wake up stream
+        # 1. Driver Check: Pehle dekhte hain driver zinda hai ya nahi
+        try:
+            requests.get(f"{API_URL}/api/v1/config", timeout=5)
+        except:
+            bot.send_message(CHAT_ID, "❌ **Error:** Driver (Port 3000) is not responding yet. Please wait 1 more minute.")
+            return
+
+        # 2. Start Stream
         requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream")
-        time.sleep(8) # Extra wait for cloud handshake
+        time.sleep(10) # 10 seconds wait for P2P tunnel
         
-        # 2. FFmpeg Capture (60 seconds)
-        # Force overwrite (-y) and copy codec for speed
+        # 3. FFmpeg Capture
         cmd = f"ffmpeg -i {API_URL}/api/v1/devices/{sn}/live -t 60 -c copy -y {file_name}"
-        subprocess.run(cmd, shell=True, timeout=100)
+        subprocess.run(cmd, shell=True, timeout=120)
         
-        # 3. Check and Send
         if os.path.exists(file_name) and os.path.getsize(file_name) > 0:
             with open(file_name, 'rb') as video:
-                bot.send_video(CHAT_ID, video, caption="🎯 **Test Successful!**\nLive View Captured: 22:57 - 22:58")
+                bot.send_video(CHAT_ID, video, caption="✅ **SUCCESS!** Live View (23:03 - 23:04)")
             os.remove(file_name)
         else:
-            bot.send_message(CHAT_ID, "❌ **Test Failed:** No video data. Is the camera online?")
+            bot.send_message(CHAT_ID, "❌ **Capture Failed:** No data from camera. Check Eufy App status.")
 
         requests.post(f"{API_URL}/api/v1/devices/{sn}/stop_livestream")
     except Exception as e:
-        bot.send_message(CHAT_ID, f"⚠️ **System Error:** {str(e)}")
+        bot.send_message(CHAT_ID, f"⚠️ **Error Details:** {str(e)}")
 
 def check_time_loop():
-    print("⏰ Monitoring time for 22:57...")
     while True:
         now = datetime.now(IST)
-        # Exact 22:57:00 par trigger
-        if now.hour == 22 and now.minute == 57:
+        if now.hour == 23 and now.minute == 3:
             trigger_live_test()
             break 
         time.sleep(1)
