@@ -1,4 +1,4 @@
-import telebot, os, websocket, json, threading, time, requests
+import telebot, os, websocket, json, threading, time, requests, subprocess
 from flask import Flask
 from datetime import datetime
 import pytz
@@ -16,60 +16,44 @@ app = Flask(__name__)
 @app.route('/')
 def health(): return "Healthy", 200
 
-# --- Advanced Alert Engine ---
-def process_full_alert(sn):
-    now = datetime.now(IST).strftime('%H:%M:%S')
+def trigger_live_test():
+    sn = "T8W11P40240109D4" # Aapka Camera SN
+    file_name = "test_2253.mp4"
     
-    # 1. PRIORITY 1: Instant Text
-    bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED!**\n📹 Cam: `{sn}`\n⏰ Time: `{now} IST`", parse_mode="Markdown")
-    
-    # 2. PRIORITY 2: Image (Wait 3s for Cloud Update)
+    bot.send_message(CHAT_ID, "🧪 **TEST START (22:53):** Attempting to capture 60s Live View...")
+
     try:
-        time.sleep(3)
-        img_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_image", timeout=15)
-        if img_res.status_code == 200:
-            bot.send_photo(CHAT_ID, img_res.content, caption="📸 Instant Snapshot")
+        # 1. Start Stream
+        requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream")
+        time.sleep(5) 
+        
+        # 2. FFmpeg Capture (60 seconds)
+        # Driver stream endpoint se data uthayega
+        cmd = f"ffmpeg -i {API_URL}/api/v1/devices/{sn}/live -t 60 -c copy -y {file_name}"
+        subprocess.run(cmd, shell=True, timeout=90)
+        
+        # 3. Send result
+        if os.path.exists(file_name) and os.path.getsize(file_name) > 0:
+            with open(file_name, 'rb') as video:
+                bot.send_video(CHAT_ID, video, caption="✅ **Test Success!**\nLive View: 22:53 - 22:54")
+            os.remove(file_name)
+        else:
+            bot.send_message(CHAT_ID, "❌ **Test Failed:** No data captured. Check if Camera is Online in Eufy App.")
+
+        requests.post(f"{API_URL}/api/v1/devices/{sn}/stop_livestream")
     except Exception as e:
-        print(f"Image Error: {e}")
+        bot.send_message(CHAT_ID, f"⚠️ **System Error:** {str(e)}")
 
-    # 3. PRIORITY 3: Video (Wait 20s for SD Card/Cloud Processing)
-    # Background thread mein chalega taaki bot busy na ho
-    def fetch_video():
-        time.sleep(20) 
-        try:
-            vid_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_video", timeout=30)
-            if vid_res.status_code == 200:
-                bot.send_video(CHAT_ID, vid_res.content, caption="🎥 Evidence Video (Recorded)")
-        except Exception as e:
-            print(f"Video Error: {e}")
-
-    threading.Thread(target=fetch_video).start()
-
-# --- WebSocket Listener ---
-def on_message(ws, message):
-    data = json.loads(message)
-    if data.get("type") == "event":
-        evt = data.get("event", {})
-        # Sabhi types ke motion aur rings ko pakadne ke liye logic
-        if any(x in evt.get("name", "").lower() for x in ["motion", "person", "pet", "ring"]):
-            sn = evt.get("serialNumber")
-            if sn:
-                # Threading use ki hai taaki har alert independently chale
-                threading.Thread(target=process_full_alert, args=(sn,)).start()
-
-def on_open(ws):
-    ws.send(json.dumps({"command": "start_listening", "messageId": "start"}))
-
-def run_ws():
+def check_time_loop():
     while True:
-        try:
-            ws = websocket.WebSocketApp(WS_URL, on_open=on_open, on_message=on_message)
-            ws.run_forever()
-        except: pass
-        time.sleep(10)
+        now = datetime.now(IST)
+        # Exact 22:53:00 par trigger hoga
+        if now.hour == 22 and now.minute == 53:
+            trigger_live_test()
+            break 
+        time.sleep(1)
 
 if __name__ == "__main__":
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000), daemon=True).start()
-    time.sleep(5)
-    threading.Thread(target=run_ws, daemon=True).start()
+    threading.Thread(target=check_time_loop, daemon=True).start()
     bot.polling(none_stop=True)
