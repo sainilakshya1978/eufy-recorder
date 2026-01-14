@@ -7,61 +7,58 @@ import pytz
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID')
 IST = pytz.timezone('Asia/Kolkata')
-
-# Using Localhost for high speed internal communication
 WS_URL = "ws://127.0.0.1:3000"
 API_URL = "http://127.0.0.1:3000"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-def send_tg_log(text):
-    try:
-        bot.send_message(CHAT_ID, f"ℹ️ **System Log:**\n{text}", parse_mode="Markdown")
-    except: pass
-
 @app.route('/')
-def health(): return "Bot is Alive", 200
+def health(): return "Healthy", 200
 
-# --- Status Command ---
-@bot.message_handler(commands=['status', 'start'])
-def status(m):
-    now = datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')
-    bot.reply_to(m, f"✅ **Cloud Deployment Status:**\n\n🟢 **Instance:** Healthy\n🔌 **Driver:** Running (Port 3000)\n⏰ **Server Time:** {now}\n🛡️ **Security:** Armed")
-
-# --- Alert Logic ---
-def send_alert(sn, event):
-    now = datetime.now(IST).strftime('%H:%M')
-    # Initial Text Alert
-    bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED**\n📸 Camera: `{sn}`\n⏰ Time: `{now} IST`")
+# --- Advanced Alert Engine ---
+def process_full_alert(sn):
+    now = datetime.now(IST).strftime('%H:%M:%S')
     
-    # Try to fetch Image
+    # 1. PRIORITY 1: Instant Text
+    bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED!**\n📹 Cam: `{sn}`\n⏰ Time: `{now} IST`", parse_mode="Markdown")
+    
+    # 2. PRIORITY 2: Image (Wait 3s for Cloud Update)
     try:
         time.sleep(3)
-        img_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_image", timeout=10)
+        img_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_image", timeout=15)
         if img_res.status_code == 200:
-            bot.send_photo(CHAT_ID, img_res.content, caption=f"📸 Snapshot from {sn}")
-    except: pass
+            bot.send_photo(CHAT_ID, img_res.content, caption="📸 Instant Snapshot")
+    except Exception as e:
+        print(f"Image Error: {e}")
 
-# --- WebSocket Engine ---
+    # 3. PRIORITY 3: Video (Wait 20s for SD Card/Cloud Processing)
+    # Background thread mein chalega taaki bot busy na ho
+    def fetch_video():
+        time.sleep(20) 
+        try:
+            vid_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_video", timeout=30)
+            if vid_res.status_code == 200:
+                bot.send_video(CHAT_ID, vid_res.content, caption="🎥 Evidence Video (Recorded)")
+        except Exception as e:
+            print(f"Video Error: {e}")
+
+    threading.Thread(target=fetch_video).start()
+
+# --- WebSocket Listener ---
 def on_message(ws, message):
     data = json.loads(message)
-    # Check for device events
     if data.get("type") == "event":
         evt = data.get("event", {})
-        if any(x in evt.get("name", "").lower() for x in ["motion", "person", "ring"]):
+        # Sabhi types ke motion aur rings ko pakadne ke liye logic
+        if any(x in evt.get("name", "").lower() for x in ["motion", "person", "pet", "ring"]):
             sn = evt.get("serialNumber")
-            threading.Thread(target=send_alert, args=(sn, evt.get("name"))).start()
-    
-    # Check for successful device discovery
-    elif "devices" in data.get("result", {}):
-        count = len(data['result']['devices'])
-        send_tg_log(f"✅ **Driver Synced!**\nFound {count} cameras online.")
+            if sn:
+                # Threading use ki hai taaki har alert independently chale
+                threading.Thread(target=process_full_alert, args=(sn,)).start()
 
 def on_open(ws):
-    print("Socket Connected")
     ws.send(json.dumps({"command": "start_listening", "messageId": "start"}))
-    ws.send(json.dumps({"command": "device.get_devices", "messageId": "init"}))
 
 def run_ws():
     while True:
@@ -72,15 +69,7 @@ def run_ws():
         time.sleep(10)
 
 if __name__ == "__main__":
-    # 1. Start Flask Health Check
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000), daemon=True).start()
-    
-    # 2. Wait and Start WebSocket
-    time.sleep(5) 
+    time.sleep(5)
     threading.Thread(target=run_ws, daemon=True).start()
-    
-    # 3. Notify Telegram that deployment is finished
-    send_tg_log("🚀 **Cloud Deployment Successful!**\nAll systems are now monitoring.")
-    
-    # 4. Start Telegram Bot
     bot.polling(none_stop=True)
