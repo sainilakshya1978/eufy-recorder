@@ -12,10 +12,12 @@ API_URL = "http://127.0.0.1:3000"
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-@app.route('/')
-def health(): return "Insight System Online", 200
+# Last Motion Time Tracker for Insight
+last_motion_time = "No motion yet"
 
-# Monitoring Windows: Midnight (12:30-5:00) & Morning (8:30-9:30)
+@app.route('/')
+def health(): return f"Status: Running | Last Motion: {last_motion_time}", 200
+
 def is_monitoring_time():
     now = datetime.now(IST)
     h, m = now.hour, now.minute
@@ -23,61 +25,39 @@ def is_monitoring_time():
     morning = (h == 8 and m >= 30) or (h == 9 and m <= 30)
     return midnight or morning
 
-# --- Full Insight Delivery Engine ---
-def robust_delivery(sn):
+def deliver_full_alert(sn):
+    global last_motion_time
     ts = datetime.now(IST).strftime('%H:%M:%S')
+    last_motion_time = ts
     
-    # 1. Start Insight
-    bot.send_message(CHAT_ID, f"🔔 **Activity Detected!**\n📹 Sensor: `{sn}`\n⏰ Time: `{ts}`\n🛠️ Status: *Processing media...*", parse_mode="Markdown")
+    bot.send_message(CHAT_ID, f"🔔 **Activity Detected!**\n📹 Sensor: `{sn}`\n⏰ Time: `{ts}`\n🛠️ Status: *Processing...*", parse_mode="Markdown")
 
     try:
-        # 2. Image Process Insight
         time.sleep(5)
-        img_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_image", timeout=10)
+        img_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_image", timeout=15)
         if img_res.status_code == 200:
-            bot.send_photo(CHAT_ID, img_res.content, caption=f"📸 Snapshot captured at {ts}")
+            bot.send_photo(CHAT_ID, img_res.content, caption=f"📸 Snapshot at {ts}")
         
-        # 3. Video Process Insight
-        bot.send_message(CHAT_ID, "🔄 *Video Stream Starting...* (FFmpeg Handshake)", parse_mode="Markdown")
+        bot.send_message(CHAT_ID, "🔄 *Capturing 30s Video Evidence...*", parse_mode="Markdown")
         requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream")
-        time.sleep(8)
+        time.sleep(10)
         
         vid_file = f"motion_{sn}.mp4"
-        # Optimized with -c copy for 0% Re-encoding CPU load
+        # CPU OPTIMIZED: -c copy ensures 100% CPU load fix
         cmd = f"ffmpeg -i {API_URL}/api/v1/devices/{sn}/live -t 30 -c copy -y {vid_file}"
-        subprocess.run(cmd, shell=True, timeout=90)
+        subprocess.run(cmd, shell=True, timeout=120)
 
         if os.path.exists(vid_file) and os.path.getsize(vid_file) > 0:
-            bot.send_message(CHAT_ID, "📤 *Uploading 30s Video Evidence...*", parse_mode="Markdown")
             with open(vid_file, 'rb') as video:
                 bot.send_video(CHAT_ID, video, caption=f"🎥 Full Record: {ts}")
             os.remove(vid_file)
-            bot.send_message(CHAT_ID, "✅ **Workflow Complete.** System back to Standby.")
-        else:
-            bot.send_message(CHAT_ID, "⚠️ **Video Note:** Stream connected but no frames captured.")
+            bot.send_message(CHAT_ID, "✅ **Workflow Complete.** Standby mode.")
         
         requests.post(f"{API_URL}/api/v1/devices/{sn}/stop_livestream")
     except Exception as e:
-        bot.send_message(CHAT_ID, f"❌ **Process Error:** {str(e)}")
+        bot.send_message(CHAT_ID, f"❌ **Alert Error:** {str(e)}")
 
-# --- Bot Commands ---
-@bot.message_handler(commands=['status'])
-def status_report(message):
-    now = datetime.now(IST).strftime('%H:%M:%S')
-    active = "🟢 MONITORING" if is_monitoring_time() else "🟡 STANDBY"
-    try:
-        requests.get(f"{API_URL}/api/v1/config", timeout=5)
-        driver = "✅ Driver Connected"
-    except: driver = "❌ Driver Offline"
-    
-    report = (f"🤖 **System Insight Report**\n\n"
-              f"⏱️ Time: `{now} IST`\n"
-              f"🛡️ State: {active}\n"
-              f"🔌 Link: {driver}\n"
-              f"⚡ CPU: Optimized (-c copy)")
-    bot.send_message(CHAT_ID, report, parse_mode="Markdown")
-
-# --- WebSocket Listener ---
+# --- WebSocket Listener with Robust Reconnect ---
 def on_message(ws, message):
     data = json.loads(message)
     if data.get("type") == "event":
@@ -85,13 +65,28 @@ def on_message(ws, message):
         if any(x in evt.get("name", "").lower() for x in ["motion", "person", "ring"]):
             if is_monitoring_time():
                 sn = evt.get("serialNumber")
-                threading.Thread(target=robust_delivery, args=(sn,)).start()
+                threading.Thread(target=deliver_full_alert, args=(sn,)).start()
 
 def run_ws():
     while True:
         try:
+            print("🔗 Connecting to Eufy Driver WS...")
             ws = websocket.WebSocketApp(f"ws://127.0.0.1:3000", 
                 on_open=lambda ws: ws.send(json.dumps({"command": "start_listening", "messageId": "L"})),
                 on_message=on_message)
             ws.run_forever()
-        except: time.sleep
+        except Exception as e:
+            print(f"WS Error: {e}. Retrying in 10s...")
+            time.sleep(10)
+
+if __name__ == "__main__":
+    # Start Health Check Server
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000), daemon=True).start()
+    
+    # Telegram Start Confirmation
+    try:
+        bot.send_message(CHAT_ID, "🚀 **System Robust & Live!**\n\nMonitoring:\n🌙 12:30 AM - 5:00 AM\n☀️ 8:30 AM - 9:30 AM")
+    except: pass
+
+    # Keep the main thread alive forever
+    run_ws()
