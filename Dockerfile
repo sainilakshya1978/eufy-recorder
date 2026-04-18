@@ -1,4 +1,3 @@
-
 FROM bropat/eufy-security-ws:latest
 
 # Core dependencies for No-Refusal Logic & FFmpeg
