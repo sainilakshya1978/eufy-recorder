@@ -1,4 +1,3 @@
-
 import telebot, os, websocket, json, threading, time, requests, subprocess
 from flask import Flask
 from datetime import datetime
@@ -97,7 +96,12 @@ def run_ws():
                                       on_message=on_message,
                                       on_error=lambda ws, e: print(f"WS Error: {e}"))
             ws.run_forever(ping_interval=30, ping_timeout=10)
+            
+            # 🔴 CRITICAL FIX: Prevent CPU Death Loop if Eufy disconnects or blocks
+            time.sleep(5) 
+            
         except Exception as e:
+            print(f"WS Exception: {e}")
             time.sleep(10) 
 
 # --- 5. MANUAL COMMANDS ---
@@ -110,15 +114,16 @@ def send_status(message):
 @bot.message_handler(commands=['test'])
 def manual_test(message):
     bot.reply_to(message, "🧪 **Initiating Manual Test Protocol...**")
+    # Make sure T8W11P40240109D4 is your correct Camera Serial Number
     threading.Thread(target=execute_delivery, args=("T8W11P40240109D4", "Manual Test")).start()
 
 if __name__ == "__main__":
-    # 🔴 CRITICAL FIX: FLASK STARTS INSTANTLY ON PORT 5000 TO PASS KOYEB HEALTH CHECKS
+    # 🔴 INSTANT HEALTH CHECK: Start Flask instantly on Port 5000 so Koyeb never kills the container
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True).start()
     
     time.sleep(2)
     try:
-        bot.send_message(CHAT_ID, "🚀 **Server Engine Online. Booting Eufy Tunnel...**")
+        bot.send_message(CHAT_ID, "🚀 **Server Engine Online. Waiting for Eufy Cloud Tunnel...**")
     except Exception as e:
         print(f"Telegram Init Error: {e}")
     
