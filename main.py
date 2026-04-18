@@ -29,10 +29,12 @@ def is_monitoring_time():
 def execute_delivery(sn, trigger_type="Auto"):
     ts = datetime.now(IST).strftime('%H:%M:%S')
     
+    # Text Ping
     try:
         bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED ({trigger_type})**\n📹 Cam: `{sn}`\n⏰ Time: `{ts} IST`\n⚡ Initiating Cloud Extraction...")
     except: pass
 
+    # Image Pull
     try:
         time.sleep(4) 
         img_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_image", timeout=15)
@@ -41,6 +43,7 @@ def execute_delivery(sn, trigger_type="Auto"):
     except Exception as e:
         print(f"Network too weak for Image: {e}")
 
+    # Video Extraction
     vid_file = f"motion_{sn}.mp4"
     try:
         requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream", timeout=10)
@@ -85,12 +88,12 @@ def on_open(ws):
     ws.send(json.dumps({"command": "start_listening", "messageId": "init_L"}))
 
 def run_ws():
-    time.sleep(10)
+    time.sleep(10) # Give Node.js time to boot
     loop_count = 0
     while True:
         try:
             def custom_on_error(ws, e):
-                # 🔴 CRITICAL FIX: Hide the annoying spam. Only show real errors.
+                # Hides the connection spam, only prints real backend errors
                 if "Connection refused" not in str(e):
                     print(f"🚨 Backend Real Error: {e}")
 
@@ -101,11 +104,10 @@ def run_ws():
             ws.run_forever(ping_interval=30, ping_timeout=10)
             
             loop_count += 1
-            # Har 1 minute mein ek single clean status message print hoga (12 loops * 5s)
             if loop_count % 12 == 0:
-                print(f"⏳ [{datetime.now(IST).strftime('%H:%M:%S')}] System Monitoring: Eufy Driver paused. Python Engine waiting for Eufy to unlock...")
+                print(f"⏳ [{datetime.now(IST).strftime('%H:%M:%S')}] System Monitoring: Engine Active, awaiting trigger...")
             
-            time.sleep(5) 
+            time.sleep(5) # Prevent CPU Death Loop
             
         except Exception as e:
             print(f"WS Exception: {e}")
@@ -124,11 +126,12 @@ def manual_test(message):
     threading.Thread(target=execute_delivery, args=("T8W11P40240109D4", "Manual Test")).start()
 
 if __name__ == "__main__":
+    # 🔴 INSTANT HEALTH CHECK: Koyeb will see Port 5000 open immediately
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True).start()
     
     time.sleep(2)
     try:
-        bot.send_message(CHAT_ID, "🚀 **Server Engine Online. Waiting for Eufy Cloud Tunnel...**")
+        bot.send_message(CHAT_ID, "🚀 **Server Engine Online. Establishing Cloud Tunnel...**")
     except Exception as e:
         print(f"Telegram Init Error: {e}")
     
