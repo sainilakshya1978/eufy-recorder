@@ -11,7 +11,7 @@ RUN pip install -r /requirements.txt
 
 COPY main.py /main.py
 
-# ULTIMATE STARTUP LOGIC: IPv4 Bridge & Parallel Launch
+# ULTIMATE STARTUP LOGIC: IPv4 Bridge (HOST=0.0.0.0) & Parallel Launch
 RUN echo '#!/bin/sh' > /start.sh && \
     echo 'mkdir -p /usr/src/app' >> /start.sh && \
     echo 'echo "{\"username\":\"$USERNAME\",\"password\":\"$PASSWORD\",\"country\":\"IN\",\"trustedDeviceName\":\"Koyeb_Titanium\"}" > /usr/src/app/config.json' >> /start.sh && \
