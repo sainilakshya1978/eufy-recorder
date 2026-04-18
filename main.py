@@ -7,7 +7,7 @@ import pytz
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID') 
 IST = pytz.timezone('Asia/Kolkata')
-API_URL = "http://127.0.0.1:3000"
+API_URL = "http://127.0.0.1:3000" 
 
 print("🤖 Initializing Titanium-Grade Telegram Bot...")
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -123,6 +123,7 @@ def send_status(message):
 @bot.message_handler(commands=['test'])
 def manual_test(message):
     bot.reply_to(message, "🧪 **Initiating Manual Test Protocol...**")
+    # T8W11P40240109D4 is your exact camera serial from logs
     threading.Thread(target=execute_delivery, args=("T8W11P40240109D4", "Manual Test")).start()
 
 if __name__ == "__main__":
