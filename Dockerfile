@@ -11,11 +11,11 @@ RUN pip install -r /requirements.txt
 
 COPY main.py /main.py
 
-# ULTIMATE STARTUP LOGIC: Parallel Launch (Bypasses Koyeb Port Block)
+# ULTIMATE STARTUP LOGIC: IPv4 Bridge & Parallel Launch
 RUN echo '#!/bin/sh' > /start.sh && \
     echo 'mkdir -p /usr/src/app' >> /start.sh && \
     echo 'echo "{\"username\":\"$USERNAME\",\"password\":\"$PASSWORD\",\"country\":\"IN\",\"trustedDeviceName\":\"Koyeb_Titanium\"}" > /usr/src/app/config.json' >> /start.sh && \
-    echo 'node dist/bin/server.js & ' >> /start.sh && \
+    echo 'HOST=0.0.0.0 node dist/bin/server.js & ' >> /start.sh && \
     echo 'python3 /main.py' >> /start.sh
 
 RUN chmod +x /start.sh
