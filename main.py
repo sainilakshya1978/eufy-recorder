@@ -29,12 +29,10 @@ def is_monitoring_time():
 def execute_delivery(sn, trigger_type="Auto"):
     ts = datetime.now(IST).strftime('%H:%M:%S')
     
-    # GUARANTEE 1: Instant Text Ping
     try:
         bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED ({trigger_type})**\n📹 Cam: `{sn}`\n⏰ Time: `{ts} IST`\n⚡ Initiating Cloud Extraction...")
     except: pass
 
-    # GUARANTEE 2: Image Pull
     try:
         time.sleep(4) 
         img_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_image", timeout=15)
@@ -43,7 +41,6 @@ def execute_delivery(sn, trigger_type="Auto"):
     except Exception as e:
         print(f"Network too weak for Image: {e}")
 
-    # GUARANTEE 3: Bulletproof Video Extraction
     vid_file = f"motion_{sn}.mp4"
     try:
         requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream", timeout=10)
@@ -84,20 +81,30 @@ def on_message(ws, message):
 
 def on_open(ws):
     print("✅ Webhook Connected to Eufy API!")
-    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE & ARMED**\nMonitoring Windows: 12:30-5:00 AM & 8:30-9:30 AM.")
+    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE & ARMED**")
     ws.send(json.dumps({"command": "start_listening", "messageId": "init_L"}))
 
 def run_ws():
-    time.sleep(10) # Let Node.js initialize first
+    time.sleep(10)
+    loop_count = 0
     while True:
         try:
+            def custom_on_error(ws, e):
+                # 🔴 CRITICAL FIX: Hide the annoying spam. Only show real errors.
+                if "Connection refused" not in str(e):
+                    print(f"🚨 Backend Real Error: {e}")
+
             ws = websocket.WebSocketApp("ws://127.0.0.1:3000",
                                       on_open=on_open,
                                       on_message=on_message,
-                                      on_error=lambda ws, e: print(f"WS Error: {e}"))
+                                      on_error=custom_on_error)
             ws.run_forever(ping_interval=30, ping_timeout=10)
             
-            # 🔴 CRITICAL FIX: Prevent CPU Death Loop if Eufy disconnects or blocks
+            loop_count += 1
+            # Har 1 minute mein ek single clean status message print hoga (12 loops * 5s)
+            if loop_count % 12 == 0:
+                print(f"⏳ [{datetime.now(IST).strftime('%H:%M:%S')}] System Monitoring: Eufy Driver paused. Python Engine waiting for Eufy to unlock...")
+            
             time.sleep(5) 
             
         except Exception as e:
@@ -114,11 +121,9 @@ def send_status(message):
 @bot.message_handler(commands=['test'])
 def manual_test(message):
     bot.reply_to(message, "🧪 **Initiating Manual Test Protocol...**")
-    # Make sure T8W11P40240109D4 is your correct Camera Serial Number
     threading.Thread(target=execute_delivery, args=("T8W11P40240109D4", "Manual Test")).start()
 
 if __name__ == "__main__":
-    # 🔴 INSTANT HEALTH CHECK: Start Flask instantly on Port 5000 so Koyeb never kills the container
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True).start()
     
     time.sleep(2)
