@@ -7,32 +7,30 @@ import pytz
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID') 
 IST = pytz.timezone('Asia/Kolkata')
-API_URL = "http://localhost:3000" # 🔴 FIX 1: Exact Eufy Server Address
+API_URL = "http://localhost:3000" 
 
 print("🤖 Initializing Titanium-Grade Telegram Bot...")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
+# Smart Anti-Crash Lock: Prevents Koyeb CPU overload during continuous motion
+last_trigger = {}
+COOLDOWN_SECONDS = 60 
+
 @app.route('/')
 def health():
     return f"Titanium No-Refusal System Online | Time: {datetime.now(IST).strftime('%H:%M:%S')}", 200
 
-# --- 2. TIME LOGIC (Strict Windows) ---
-def is_monitoring_time():
-    now = datetime.now(IST)
-    h, m = now.hour, now.minute
-    midnight = (h == 0 and m >= 30) or (1 <= h < 5)
-    morning = (h == 8 and m >= 30) or (h == 9 and m <= 30)
-    return midnight or morning
-
-# --- 3. THE NO-REFUSAL DELIVERY WORKFLOW ---
+# --- 2. THE NO-REFUSAL DELIVERY WORKFLOW ---
 def execute_delivery(sn, trigger_type="Auto"):
     ts = datetime.now(IST).strftime('%H:%M:%S')
     
+    # 1. Text Ping
     try:
         bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED ({trigger_type})**\n📹 Cam: `{sn}`\n⏰ Time: `{ts} IST`\n⚡ Initiating Cloud Extraction...")
     except: pass
 
+    # 2. Image Pull
     try:
         time.sleep(4) 
         img_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_image", timeout=15)
@@ -41,6 +39,7 @@ def execute_delivery(sn, trigger_type="Auto"):
     except Exception as e:
         print(f"Network too weak for Image: {e}")
 
+    # 3. Video Extraction
     vid_file = f"motion_{sn}.mp4"
     try:
         requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream", timeout=10)
@@ -67,21 +66,25 @@ def execute_delivery(sn, trigger_type="Auto"):
         if os.path.exists(vid_file):
             os.remove(vid_file)
 
-# --- 4. WEBSOCKET & AUTO-RECONNECT ---
+# --- 3. WEBSOCKET & CONTINUOUS AUTO-RECONNECT ---
 def on_message(ws, message):
     data = json.loads(message)
     if data.get("type") == "event":
         evt = data.get("event", {})
         if any(x in evt.get("name", "").lower() for x in ["motion", "person", "ring"]):
-            if is_monitoring_time():
-                sn = evt.get("serialNumber")
+            sn = evt.get("serialNumber")
+            now = time.time()
+            
+            # ALL-TIME WORKING LOGIC + COOLDOWN
+            if sn not in last_trigger or (now - last_trigger[sn]) > COOLDOWN_SECONDS:
+                last_trigger[sn] = now
                 threading.Thread(target=execute_delivery, args=(sn, "Auto")).start()
             else:
-                print(f"Motion at {datetime.now(IST).strftime('%H:%M:%S')}, ignored (Standby Mode).")
+                print(f"Motion at {datetime.now(IST).strftime('%H:%M:%S')} ignored (Cooldown active to prevent server crash).")
 
 def on_open(ws):
-    print("✅ Webhook Connected to Eufy API!") # Yeh line aayegi tabhi success hai!
-    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE & ARMED**")
+    print("✅ Webhook Connected to Eufy API!") 
+    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE & ARMED (24/7 Continuous Mode)**")
     ws.send(json.dumps({"command": "start_listening", "messageId": "init_L"}))
 
 def run_ws():
@@ -93,7 +96,6 @@ def run_ws():
                 if "Connection refused" not in str(e):
                     print(f"🚨 Backend Real Error: {e}")
 
-            # 🔴 FIX 2: Exact Localhost WebSocket Route
             ws = websocket.WebSocketApp("ws://localhost:3000",
                                       on_open=on_open,
                                       on_message=on_message,
@@ -102,7 +104,7 @@ def run_ws():
             
             loop_count += 1
             if loop_count % 12 == 0:
-                print(f"⏳ [{datetime.now(IST).strftime('%H:%M:%S')}] System Monitoring: Attempting connection bridge...")
+                print(f"⏳ [{datetime.now(IST).strftime('%H:%M:%S')}] System Monitoring: Engine Active, awaiting 24/7 motion trigger...")
             
             time.sleep(5) 
             
@@ -110,25 +112,30 @@ def run_ws():
             print(f"WS Exception: {e}")
             time.sleep(10) 
 
-# --- 5. MANUAL COMMANDS ---
+# --- 4. MANUAL COMMANDS ---
 @bot.message_handler(commands=['status'])
 def send_status(message):
     now = datetime.now(IST).strftime('%H:%M:%S')
-    monitoring = "🟢 ACTIVE" if is_monitoring_time() else "🟡 STANDBY"
-    bot.reply_to(message, f"📊 **System Status**\n⏰ Time: `{now} IST`\n🛡️ Mode: {monitoring}\n⚡ Engine: Titanium No-Refusal")
+    bot.reply_to(message, f"📊 **System Status**\n⏰ Time: `{now} IST`\n🛡️ Mode: 🟢 24/7 CONTINUOUS\n⚡ Engine: Titanium No-Refusal")
 
 @bot.message_handler(commands=['test'])
 def manual_test(message):
     bot.reply_to(message, "🧪 **Initiating Manual Test Protocol...**")
+    # Execute manually bypassing the cooldown
     threading.Thread(target=execute_delivery, args=("T8W11P40240109D4", "Manual Test")).start()
 
 if __name__ == "__main__":
+    # 1. Koyeb Health Check
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True).start()
+    
+    # 2. Telegram Listener (Allows /test and /status to work)
+    threading.Thread(target=lambda: bot.infinity_polling(skip_pending=True), daemon=True).start()
     
     time.sleep(2)
     try:
-        bot.send_message(CHAT_ID, "🚀 **Server Engine Online. Establishing Cloud Tunnel...**")
+        bot.send_message(CHAT_ID, "🚀 **Server Engine Online. Establishing Continuous Cloud Tunnel...**")
     except Exception as e:
-        pass # Ignored transient network flap during boot
+        pass 
     
+    # 3. Start Eufy Engine
     run_ws()
