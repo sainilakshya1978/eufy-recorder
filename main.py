@@ -9,7 +9,7 @@ CHAT_ID = os.getenv('CHAT_ID')
 IST = pytz.timezone('Asia/Kolkata')
 API_URL = "http://localhost:3000" 
 
-print("🤖 Initializing Titanium-Grade Telegram Bot (Guaranteed Photo Edition)...")
+print("🚀 Initializing Space-Grade Telegram Bot (Dual-Core Parallel Edition)...")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
@@ -19,9 +19,9 @@ COOLDOWN_SECONDS = 60
 
 @app.route('/')
 def health():
-    return f"Titanium System Online | Time: {datetime.now(IST).strftime('%H:%M:%S')}", 200
+    return f"Titanium Space System Online | Time: {datetime.now(IST).strftime('%H:%M:%S')}", 200
 
-# --- 2. THE ZERO-FAILURE DELIVERY WORKFLOW ---
+# --- 2. THE DUAL-CORE SPACE TECH WORKFLOW ---
 def execute_delivery(sn, trigger_type="Auto"):
     ts_now = datetime.now(IST)
     ts = ts_now.strftime('%H:%M:%S')
@@ -31,62 +31,80 @@ def execute_delivery(sn, trigger_type="Auto"):
     vid_file = f"motion_{sn}_{unique_id}.mp4"
     
     try:
-        bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED ({trigger_type})**\n📹 Cam: `{sn}`\n⏰ Time: `{ts} IST`\n⚡ Waking up camera...")
+        bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED ({trigger_type})**\n📹 Cam: `{sn}`\n⏰ Time: `{ts} IST`\n⚡ Booting Space-Tech Engine...")
     except: pass 
 
+    video_process = None
     try:
-        # 1. Wake Up the Camera
-        try:
-            requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream", timeout=45)
-        except Exception as e:
-            bot.send_message(CHAT_ID, f"⚠️ Camera Offline or deeply sleeping.")
+        # 🔨 STEP 1: TRIPLE-KNOCK WAKE UP (Handles Deep Sleep)
+        stream_started = False
+        for attempt in range(3): 
+            try:
+                res = requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream", timeout=25)
+                if res.status_code == 200:
+                    stream_started = True
+                    break 
+            except Exception as e:
+                time.sleep(5) 
+                
+        if not stream_started:
+            bot.send_message(CHAT_ID, f"⚠️ **Camera Asleep:** Eufy Cloud failed to wake the camera.")
             return 
             
-        bot.send_message(CHAT_ID, "📸 Hunting for Instant Snapshot...")
+        bot.send_message(CHAT_ID, "✅ Camera Awake! Initiating Dual-Core Extraction...")
+        time.sleep(5) # Brief pause for P2P handshake
         
-        # 🎯 2. THE GUARANTEED PHOTO SNIPER LOOP
+        # 🎥 STEP 2: START VIDEO IMMEDIATELY (Background Process)
+        # We start video first so we don't miss a single second of the action!
+        vid_cmd = f"ffmpeg -nostdin -y -hide_banner -loglevel error -timeout 15000000 -i {API_URL}/api/v1/devices/{sn}/live -t 30 -c copy {vid_file}"
+        video_process = subprocess.Popen(vid_cmd, shell=True)
+
+        # 📸 STEP 3: THE "GHOST" SNIPER (Extract photo FROM the recording video)
         photo_secured = False
-        for attempt in range(5): # It will try 5 times (giving the camera 15-20 seconds to send the first frame)
-            time.sleep(3) # Wait 3 seconds for stream to flow
-            img_cmd = f"ffmpeg -nostdin -hide_banner -loglevel error -y -i {API_URL}/api/v1/devices/{sn}/live -vframes 1 -q:v 2 {img_file}"
-            subprocess.run(img_cmd, shell=True, timeout=15)
-            
-            # If the image is created and is a real file (larger than 10KB), SEND IT!
-            if os.path.exists(img_file) and os.path.getsize(img_file) > 10 * 1024:
-                with open(img_file, 'rb') as photo:
-                    bot.send_photo(CHAT_ID, photo, caption=f"📸 **GUARANTEED SNAPSHOT**\n⏰ Time: {ts}")
-                photo_secured = True
-                break # Photo sent! Stop hunting and move to video.
+        for attempt in range(8): # Check the recording file for 24 seconds max
+            time.sleep(3) 
+            # Check if video has started saving data to server
+            if os.path.exists(vid_file) and os.path.getsize(vid_file) > 50 * 1024: 
+                # Tap into the local file and extract the first frame lightning fast!
+                img_cmd = f"ffmpeg -nostdin -y -hide_banner -loglevel error -i {vid_file} -vframes 1 -q:v 2 {img_file}"
+                subprocess.run(img_cmd, shell=True, timeout=10)
                 
-        if not photo_secured:
-            bot.send_message(CHAT_ID, "⚠️ Could not extract photo instantly. Forcing video recording...")
-
-        # 🎥 3. RECORD 30s VIDEO (Happens AFTER photo is safely sent)
-        bot.send_message(CHAT_ID, "🎥 Recording 30s Video Evidence...")
-        vid_cmd = f"ffmpeg -nostdin -hide_banner -loglevel error -timeout 15000000 -i {API_URL}/api/v1/devices/{sn}/live -t 30 -c copy -y {vid_file}"
+                if os.path.exists(img_file) and os.path.getsize(img_file) > 10 * 1024:
+                    with open(img_file, 'rb') as photo:
+                        bot.send_photo(CHAT_ID, photo, caption=f"📸 **INSTANT AI SNAPSHOT**\n⏰ {ts}")
+                    photo_secured = True
+                    break # Photo sent! Exit the sniper loop.
         
-        try:
-            subprocess.run(vid_cmd, shell=True, timeout=120, check=False)
-        except subprocess.TimeoutExpired:
-            pass 
+        if not photo_secured:
+            bot.send_message(CHAT_ID, "⚠️ Network fluctuation prevented instant photo. Video is still recording...")
 
-        # 📤 4. UPLOAD VIDEO
-        if os.path.exists(vid_file) and os.path.getsize(vid_file) > 100 * 1024:
+        # ⏳ STEP 4: WAIT FOR VIDEO TO FINISH (Wait up to 45 secs for the 30s video to close)
+        try:
+            video_process.wait(timeout=45)
+        except subprocess.TimeoutExpired:
+            pass # Force move on if FFmpeg hangs
+
+        # 📤 STEP 5: UPLOAD VIDEO
+        if os.path.exists(vid_file) and os.path.getsize(vid_file) > 150 * 1024:
             with open(vid_file, 'rb') as video:
-                bot.send_message(CHAT_ID, "📤 Uploading Video...")
-                bot.send_video(CHAT_ID, video, caption=f"🎥 Secured Evidence: {ts}", timeout=150)
+                bot.send_video(CHAT_ID, video, caption=f"🎥 FULL SECURED EVIDENCE: {ts}", timeout=150)
         else:
-            bot.send_message(CHAT_ID, f"⚠️ **Video Failed:** Stream disconnected early. But Photo was prioritized.")
+            bot.send_message(CHAT_ID, f"⚠️ **Video Truncated:** The subject moved out of frame too quickly.")
             
     except Exception as e:
         try: bot.send_message(CHAT_ID, f"❌ **System Error:** {str(e)[:60]}")
         except: pass
     
     finally:
-        # Mandatory Cleanup
+        # STEP 6: CRITICAL CLEANUP
         try: requests.post(f"{API_URL}/api/v1/devices/{sn}/stop_livestream", timeout=10)
         except: pass
         
+        # Kill the ghost process if it got stuck
+        if video_process and video_process.poll() is None:
+            try: video_process.kill()
+            except: pass
+
         if os.path.exists(vid_file):
             try: os.remove(vid_file)
             except: pass
@@ -106,12 +124,10 @@ def on_message(ws, message):
             if sn not in last_trigger or (now - last_trigger[sn]) > COOLDOWN_SECONDS:
                 last_trigger[sn] = now
                 threading.Thread(target=execute_delivery, args=(sn, "Auto")).start()
-            else:
-                pass # Cooldown active
 
 def on_open(ws):
     print("✅ Webhook Connected to Eufy API!") 
-    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE & ARMED (Guaranteed Photo Mode)**")
+    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE & ARMED (Space-Tech Edition)**")
     ws.send(json.dumps({"command": "start_listening", "messageId": "init_L"}))
 
 def run_ws():
@@ -133,7 +149,7 @@ def run_ws():
 # --- 4. MANUAL COMMANDS ---
 @bot.message_handler(commands=['status'])
 def send_status(message):
-    bot.reply_to(message, f"📊 **System Status**\n🛡️ Mode: 🟢 24/7 CONTINUOUS\n⚡ Engine: Guaranteed Photo Edition")
+    bot.reply_to(message, f"📊 **System Status**\n🛡️ Mode: 🟢 24/7 CONTINUOUS\n⚡ Engine: Space-Tech Dual-Core")
 
 @bot.message_handler(commands=['test'])
 def manual_test(message):
