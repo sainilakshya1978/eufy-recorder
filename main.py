@@ -9,11 +9,11 @@ CHAT_ID = os.getenv('CHAT_ID')
 IST = pytz.timezone('Asia/Kolkata')
 API_URL = "http://localhost:3000" 
 
-print("🤖 Initializing Titanium-Grade Telegram Bot (Zero-Failure Edition)...")
+print("🤖 Initializing Titanium-Grade Telegram Bot (Ultimate Zero-Failure + Snapshot Edition)...")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-# Smart Anti-Crash Lock
+# Smart Anti-Crash Lock: Prevents server overload during continuous motion
 last_trigger = {}
 COOLDOWN_SECONDS = 60 
 
@@ -25,12 +25,14 @@ def health():
 def execute_delivery(sn, trigger_type="Auto"):
     ts_now = datetime.now(IST)
     ts = ts_now.strftime('%H:%M:%S')
+    
     # FAIL-SAFE 1: Unique filenames to prevent thread collisions
     unique_id = int(ts_now.timestamp())
+    img_file = f"snap_{sn}_{unique_id}.jpg"
     vid_file = f"motion_{sn}_{unique_id}.mp4"
     
     try:
-        bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED ({trigger_type})**\n📹 Cam: `{sn}`\n⏰ Time: `{ts} IST`\n⚡ Bypassing Cloud. Initializing Direct P2P Tunnel...")
+        bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED ({trigger_type})**\n📹 Cam: `{sn}`\n⏰ Time: `{ts} IST`\n⚡ Connecting P2P Tunnel...")
     except: pass # Never crash if Telegram API fluctuates
 
     try:
@@ -38,28 +40,37 @@ def execute_delivery(sn, trigger_type="Auto"):
         try:
             requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream", timeout=45)
         except Exception as e:
-            bot.send_message(CHAT_ID, f"⚠️ P2P Tunnel Timeout: Camera is in deep sleep or offline.")
-            return # Exit safely without crashing
+            bot.send_message(CHAT_ID, f"⚠️ P2P Tunnel Timeout: Camera is sleeping or offline.")
+            return 
             
-        bot.send_message(CHAT_ID, "🔄 Tunnel Established (Waiting 15s to stabilize stream)...")
-        time.sleep(15) 
+        time.sleep(12) # Let the camera stream stabilize
         
-        # FAIL-SAFE 3: -nostdin prevents FFmpeg from turning into a zombie process and eating CPU
-        cmd = f"ffmpeg -nostdin -hide_banner -loglevel error -timeout 15000000 -i {API_URL}/api/v1/devices/{sn}/live -t 30 -c copy -y {vid_file}"
+        # 📸 INSTANT FRAME EXTRACTION (No Cloud Needed)
+        bot.send_message(CHAT_ID, "📸 Extracting Instant Snapshot from Live Stream...")
+        img_cmd = f"ffmpeg -nostdin -hide_banner -loglevel error -timeout 15000000 -i {API_URL}/api/v1/devices/{sn}/live -vframes 1 -q:v 2 -y {img_file}"
+        try:
+            subprocess.run(img_cmd, shell=True, timeout=30)
+            if os.path.exists(img_file) and os.path.getsize(img_file) > 0:
+                with open(img_file, 'rb') as photo:
+                    bot.send_photo(CHAT_ID, photo, caption=f"👁️ Instant Snapshot\n⏰ Time: {ts}")
+        except: pass # If image fails, don't crash, just move to video
+
+        # 🎥 RECORD 30s VIDEO
+        bot.send_message(CHAT_ID, "🎥 Recording 30s Video Evidence...")
+        vid_cmd = f"ffmpeg -nostdin -hide_banner -loglevel error -timeout 15000000 -i {API_URL}/api/v1/devices/{sn}/live -t 30 -c copy -y {vid_file}"
         
         try:
-            subprocess.run(cmd, shell=True, timeout=120, check=False)
+            subprocess.run(vid_cmd, shell=True, timeout=120, check=False)
         except subprocess.TimeoutExpired:
-            bot.send_message(CHAT_ID, "⚠️ Extraction took too long. Forcing process kill to save server.")
+            pass # Force kill if it hangs to save CPU
 
-        # FAIL-SAFE 4: Verifying the file is actually playable ( > 100KB )
+        # 📤 UPLOAD VIDEO
         if os.path.exists(vid_file) and os.path.getsize(vid_file) > 100 * 1024:
             with open(vid_file, 'rb') as video:
-                bot.send_message(CHAT_ID, "📤 Evidence Secured. Uploading...")
-                # High timeout for Telegram upload
+                bot.send_message(CHAT_ID, "📤 Uploading Video to Telegram...")
                 bot.send_video(CHAT_ID, video, caption=f"🎥 Secured Evidence: {ts}", timeout=150)
         else:
-            bot.send_message(CHAT_ID, f"⚠️ **Stream Empty:** The camera disconnected before saving 30s of video. Timestamp: {ts}")
+            bot.send_message(CHAT_ID, f"⚠️ **Stream Empty:** Camera disconnected before video finished. Timestamp: {ts}")
             
     except Exception as e:
         try: bot.send_message(CHAT_ID, f"❌ **System Error:** {str(e)[:60]}")
@@ -67,12 +78,14 @@ def execute_delivery(sn, trigger_type="Auto"):
     
     finally:
         # FAIL-SAFE 5: Mandatory Cleanup to prevent Koyeb disk from filling up
-        try:
-            requests.post(f"{API_URL}/api/v1/devices/{sn}/stop_livestream", timeout=10)
+        try: requests.post(f"{API_URL}/api/v1/devices/{sn}/stop_livestream", timeout=10)
         except: pass
         
         if os.path.exists(vid_file):
             try: os.remove(vid_file)
+            except: pass
+        if os.path.exists(img_file):
+            try: os.remove(img_file)
             except: pass
 
 # --- 3. WEBSOCKET & CONTINUOUS AUTO-RECONNECT ---
@@ -92,7 +105,7 @@ def on_message(ws, message):
 
 def on_open(ws):
     print("✅ Webhook Connected to Eufy API!") 
-    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE & ARMED (Zero-Failure 24/7 Mode)**")
+    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE & ARMED (Ultimate Zero-Failure Mode)**")
     ws.send(json.dumps({"command": "start_listening", "messageId": "init_L"}))
 
 def run_ws():
@@ -124,7 +137,7 @@ def run_ws():
 @bot.message_handler(commands=['status'])
 def send_status(message):
     now = datetime.now(IST).strftime('%H:%M:%S')
-    bot.reply_to(message, f"📊 **System Status**\n⏰ Time: `{now} IST`\n🛡️ Mode: 🟢 24/7 CONTINUOUS\n⚡ Engine: Titanium (Zero-Failure Edition)")
+    bot.reply_to(message, f"📊 **System Status**\n⏰ Time: `{now} IST`\n🛡️ Mode: 🟢 24/7 CONTINUOUS\n⚡ Engine: Titanium (Ultimate Zero-Failure)")
 
 @bot.message_handler(commands=['test'])
 def manual_test(message):
