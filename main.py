@@ -21,30 +21,24 @@ COOLDOWN_SECONDS = 60
 def health():
     return f"Titanium No-Refusal System Online | Time: {datetime.now(IST).strftime('%H:%M:%S')}", 200
 
-# --- 2. THE NO-REFUSAL DELIVERY WORKFLOW ---
+# --- 2. THE NO-REFUSAL DELIVERY WORKFLOW (NO-CLOUD SUBSCRIPTION VERSION) ---
 def execute_delivery(sn, trigger_type="Auto"):
     ts = datetime.now(IST).strftime('%H:%M:%S')
     
     # 1. Text Ping
     try:
-        bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED ({trigger_type})**\n📹 Cam: `{sn}`\n⏰ Time: `{ts} IST`\n⚡ Initiating Cloud Extraction...")
+        bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED ({trigger_type})**\n📹 Cam: `{sn}`\n⏰ Time: `{ts} IST`\n⚡ Bypassing Cloud (No Sub). Initiating Direct P2P Video Tunnel...")
     except: pass
 
-    # 2. Image Pull
-    try:
-        time.sleep(4) 
-        img_res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_image", timeout=15)
-        if img_res.status_code == 200:
-            bot.send_photo(CHAT_ID, img_res.content, caption="📸 Verified Cloud Snapshot")
-    except Exception as e:
-        print(f"Network too weak for Image: {e}")
+    # NOTE: Image Pull section completely removed because Eufy doesn't generate thumbnails without a paid cloud subscription.
 
-    # 3. Video Extraction
+    # 2. Video Extraction (Direct from Camera)
     vid_file = f"motion_{sn}.mp4"
     try:
-        requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream", timeout=10)
-        bot.send_message(CHAT_ID, "🔄 Handshaking with Cloud Tunnel (Waiting 12s for stream)...")
-        time.sleep(12) 
+        # Increased timeout to 45 seconds to let the sleeping camera wake up
+        requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream", timeout=45)
+        bot.send_message(CHAT_ID, "🔄 Handshaking with P2P Tunnel (Waiting 15s for stream to stabilize)...")
+        time.sleep(15) 
         
         cmd = f"ffmpeg -hide_banner -loglevel error -timeout 15000000 -i {API_URL}/api/v1/devices/{sn}/live -t 30 -c copy -y {vid_file}"
         subprocess.run(cmd, shell=True, timeout=120)
@@ -116,7 +110,7 @@ def run_ws():
 @bot.message_handler(commands=['status'])
 def send_status(message):
     now = datetime.now(IST).strftime('%H:%M:%S')
-    bot.reply_to(message, f"📊 **System Status**\n⏰ Time: `{now} IST`\n🛡️ Mode: 🟢 24/7 CONTINUOUS\n⚡ Engine: Titanium No-Refusal")
+    bot.reply_to(message, f"📊 **System Status**\n⏰ Time: `{now} IST`\n🛡️ Mode: 🟢 24/7 CONTINUOUS\n⚡ Engine: Titanium (No-Cloud Sub Version)")
 
 @bot.message_handler(commands=['test'])
 def manual_test(message):
