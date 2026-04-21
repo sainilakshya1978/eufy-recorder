@@ -1,4 +1,4 @@
-import telebot, os, websocket, json, threading, time, requests, subprocess
+import telebot, os, websocket, json, threading, time, requests
 from flask import Flask
 from datetime import datetime
 import pytz
@@ -9,110 +9,59 @@ CHAT_ID = os.getenv('CHAT_ID')
 IST = pytz.timezone('Asia/Kolkata')
 API_URL = "http://localhost:3000" 
 
-print("🚀 Initializing Space-Grade Telegram Bot (Dual-Core Parallel Edition)...")
+print("⚡ Initializing 100% Bulletproof Interceptor Bot...")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-# Smart Anti-Crash Lock
+# Smart Lock to prevent spam
 last_trigger = {}
-COOLDOWN_SECONDS = 60 
+COOLDOWN_SECONDS = 30 
 
 @app.route('/')
 def health():
-    return f"Titanium Space System Online | Time: {datetime.now(IST).strftime('%H:%M:%S')}", 200
+    return f"Titanium Interceptor Online | Time: {datetime.now(IST).strftime('%H:%M:%S')}", 200
 
-# --- 2. THE DUAL-CORE SPACE TECH WORKFLOW ---
+# --- 2. THE 100% GUARANTEED PHOTO WORKFLOW ---
 def execute_delivery(sn, trigger_type="Auto"):
     ts_now = datetime.now(IST)
     ts = ts_now.strftime('%H:%M:%S')
     
-    unique_id = int(ts_now.timestamp())
-    img_file = f"snap_{sn}_{unique_id}.jpg"
-    vid_file = f"motion_{sn}_{unique_id}.mp4"
-    
     try:
-        bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED ({trigger_type})**\n📹 Cam: `{sn}`\n⏰ Time: `{ts} IST`\n⚡ Booting Space-Tech Engine...")
+        bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED**\n📹 Cam: `{sn}`\n⏰ {ts} IST\n⚡ Intercepting Eufy Cloud Thumbnail...")
     except: pass 
 
-    video_process = None
+    # Wait 4 seconds for the Eufy Cloud to process the notification and send the photo
+    time.sleep(4)
+    photo_secured = False
+
+    # 🕵️‍♂️ INTERCEPT METHOD 1: Direct Image Cache
     try:
-        # 🔨 STEP 1: TRIPLE-KNOCK WAKE UP (Handles Deep Sleep)
-        stream_started = False
-        for attempt in range(3): 
-            try:
-                res = requests.post(f"{API_URL}/api/v1/devices/{sn}/start_livestream", timeout=25)
-                if res.status_code == 200:
-                    stream_started = True
-                    break 
-            except Exception as e:
-                time.sleep(5) 
-                
-        if not stream_started:
-            bot.send_message(CHAT_ID, f"⚠️ **Camera Asleep:** Eufy Cloud failed to wake the camera.")
-            return 
-            
-        bot.send_message(CHAT_ID, "✅ Camera Awake! Initiating Dual-Core Extraction...")
-        time.sleep(5) # Brief pause for P2P handshake
-        
-        # 🎥 STEP 2: START VIDEO IMMEDIATELY (Background Process)
-        # We start video first so we don't miss a single second of the action!
-        vid_cmd = f"ffmpeg -nostdin -y -hide_banner -loglevel error -timeout 15000000 -i {API_URL}/api/v1/devices/{sn}/live -t 30 -c copy {vid_file}"
-        video_process = subprocess.Popen(vid_cmd, shell=True)
-
-        # 📸 STEP 3: THE "GHOST" SNIPER (Extract photo FROM the recording video)
-        photo_secured = False
-        for attempt in range(8): # Check the recording file for 24 seconds max
-            time.sleep(3) 
-            # Check if video has started saving data to server
-            if os.path.exists(vid_file) and os.path.getsize(vid_file) > 50 * 1024: 
-                # Tap into the local file and extract the first frame lightning fast!
-                img_cmd = f"ffmpeg -nostdin -y -hide_banner -loglevel error -i {vid_file} -vframes 1 -q:v 2 {img_file}"
-                subprocess.run(img_cmd, shell=True, timeout=10)
-                
-                if os.path.exists(img_file) and os.path.getsize(img_file) > 10 * 1024:
-                    with open(img_file, 'rb') as photo:
-                        bot.send_photo(CHAT_ID, photo, caption=f"📸 **INSTANT AI SNAPSHOT**\n⏰ {ts}")
-                    photo_secured = True
-                    break # Photo sent! Exit the sniper loop.
-        
-        if not photo_secured:
-            bot.send_message(CHAT_ID, "⚠️ Network fluctuation prevented instant photo. Video is still recording...")
-
-        # ⏳ STEP 4: WAIT FOR VIDEO TO FINISH (Wait up to 45 secs for the 30s video to close)
-        try:
-            video_process.wait(timeout=45)
-        except subprocess.TimeoutExpired:
-            pass # Force move on if FFmpeg hangs
-
-        # 📤 STEP 5: UPLOAD VIDEO
-        if os.path.exists(vid_file) and os.path.getsize(vid_file) > 150 * 1024:
-            with open(vid_file, 'rb') as video:
-                bot.send_video(CHAT_ID, video, caption=f"🎥 FULL SECURED EVIDENCE: {ts}", timeout=150)
-        else:
-            bot.send_message(CHAT_ID, f"⚠️ **Video Truncated:** The subject moved out of frame too quickly.")
-            
+        res = requests.get(f"{API_URL}/api/v1/devices/{sn}/last_image", timeout=10)
+        if res.status_code == 200 and len(res.content) > 1000: 
+            bot.send_photo(CHAT_ID, res.content, caption=f"📸 **INSTANT PHOTO SECURED**\n⏰ Time: {ts}")
+            photo_secured = True
     except Exception as e:
-        try: bot.send_message(CHAT_ID, f"❌ **System Error:** {str(e)[:60]}")
-        except: pass
-    
-    finally:
-        # STEP 6: CRITICAL CLEANUP
-        try: requests.post(f"{API_URL}/api/v1/devices/{sn}/stop_livestream", timeout=10)
-        except: pass
-        
-        # Kill the ghost process if it got stuck
-        if video_process and video_process.poll() is None:
-            try: video_process.kill()
-            except: pass
+        print(f"Method 1 failed: {e}")
 
-        if os.path.exists(vid_file):
-            try: os.remove(vid_file)
-            except: pass
-        if os.path.exists(img_file):
-            try: os.remove(img_file)
-            except: pass
+    # 🕵️‍♂️ INTERCEPT METHOD 2: Hidden Device Payload (If Method 1 misses)
+    if not photo_secured:
+        try:
+            res = requests.get(f"{API_URL}/api/v1/devices/{sn}", timeout=10)
+            data = res.json()
+            pic_val = data.get('data', {}).get('properties', {}).get('picture', {}).get('value')
+            if pic_val and isinstance(pic_val, dict) and 'data' in pic_val:
+                img_bytes = bytes(pic_val['data'])
+                if len(img_bytes) > 1000:
+                    bot.send_photo(CHAT_ID, img_bytes, caption=f"📸 **INSTANT PHOTO SECURED**\n⏰ Time: {ts}")
+                    photo_secured = True
+        except Exception as e:
+            print(f"Method 2 failed: {e}")
 
-# --- 3. WEBSOCKET & CONTINUOUS AUTO-RECONNECT ---
+    # ⚠️ IF PHOTO IS MISSING
+    if not photo_secured:
+        bot.send_message(CHAT_ID, f"⚠️ **Photo Not Found in Cloud.**\n\n**CRITICAL FIX:**\nOpen Eufy App -> Camera Settings -> Notifications -> Make sure 'Include Thumbnail' is turned ON.")
+
+# --- 3. THE FAIL-SAFE LISTENER ---
 def on_message(ws, message):
     data = json.loads(message)
     if data.get("type") == "event":
@@ -126,8 +75,8 @@ def on_message(ws, message):
                 threading.Thread(target=execute_delivery, args=(sn, "Auto")).start()
 
 def on_open(ws):
-    print("✅ Webhook Connected to Eufy API!") 
-    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE & ARMED (Space-Tech Edition)**")
+    print("✅ System 100% Armed!")
+    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE (100% Bulletproof Photo Edition)**")
     ws.send(json.dumps({"command": "start_listening", "messageId": "init_L"}))
 
 def run_ws():
@@ -149,15 +98,19 @@ def run_ws():
 # --- 4. MANUAL COMMANDS ---
 @bot.message_handler(commands=['status'])
 def send_status(message):
-    bot.reply_to(message, f"📊 **System Status**\n🛡️ Mode: 🟢 24/7 CONTINUOUS\n⚡ Engine: Space-Tech Dual-Core")
+    bot.reply_to(message, f"📊 **System Status**\n🛡️ Mode: 🟢 Active\n⚡ Engine: 100% Photo Interceptor")
 
 @bot.message_handler(commands=['test'])
 def manual_test(message):
-    bot.reply_to(message, "🧪 **Initiating Manual Test...**")
+    bot.reply_to(message, "🧪 **Initiating Photo Test...**")
     threading.Thread(target=execute_delivery, args=("T8W11P40240109D4", "Manual Test")).start()
 
 if __name__ == "__main__":
+    # Flask Server for Koyeb Health Check
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True).start()
+    
+    # Telegram Command Listener
     threading.Thread(target=lambda: bot.infinity_polling(skip_pending=True), daemon=True).start()
+    
     time.sleep(2)
     run_ws()
