@@ -27,10 +27,10 @@ def execute_delivery(sn, trigger_type="Auto"):
     ts = ts_now.strftime('%H:%M:%S')
     
     try:
-        bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED**\n📹 Cam: `{sn}`\n⏰ {ts} IST\n⚡ Intercepting Eufy Cloud Thumbnail...")
+        bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED ({trigger_type})**\n📹 Cam: `{sn}`\n⏰ {ts} IST\n⚡ Intercepting Push Notification Thumbnail...")
     except: pass 
 
-    # Wait 4 seconds for the Eufy Cloud to process the notification and send the photo
+    # Wait 4 seconds for the Eufy Cloud to process the notification and send the photo to our server
     time.sleep(4)
     photo_secured = False
 
@@ -41,13 +41,14 @@ def execute_delivery(sn, trigger_type="Auto"):
             bot.send_photo(CHAT_ID, res.content, caption=f"📸 **INSTANT PHOTO SECURED**\n⏰ Time: {ts}")
             photo_secured = True
     except Exception as e:
-        print(f"Method 1 failed: {e}")
+        pass # Silently fail and try method 2
 
     # 🕵️‍♂️ INTERCEPT METHOD 2: Hidden Device Payload (If Method 1 misses)
     if not photo_secured:
         try:
             res = requests.get(f"{API_URL}/api/v1/devices/{sn}", timeout=10)
             data = res.json()
+            # Digging into the JSON payload to extract the raw image bytes sent in the push notification
             pic_val = data.get('data', {}).get('properties', {}).get('picture', {}).get('value')
             if pic_val and isinstance(pic_val, dict) and 'data' in pic_val:
                 img_bytes = bytes(pic_val['data'])
@@ -55,11 +56,11 @@ def execute_delivery(sn, trigger_type="Auto"):
                     bot.send_photo(CHAT_ID, img_bytes, caption=f"📸 **INSTANT PHOTO SECURED**\n⏰ Time: {ts}")
                     photo_secured = True
         except Exception as e:
-            print(f"Method 2 failed: {e}")
+            pass
 
     # ⚠️ IF PHOTO IS MISSING
     if not photo_secured:
-        bot.send_message(CHAT_ID, f"⚠️ **Photo Not Found in Cloud.**\n\n**CRITICAL FIX:**\nOpen Eufy App -> Camera Settings -> Notifications -> Make sure 'Include Thumbnail' is turned ON.")
+        bot.send_message(CHAT_ID, f"⚠️ **Photo Not Found in Payload.**\n\n**CRITICAL FIX:**\nOpen Eufy App -> Camera Settings -> Notifications -> Make sure 'Include Thumbnail' is turned ON.")
 
 # --- 3. THE FAIL-SAFE LISTENER ---
 def on_message(ws, message):
@@ -76,7 +77,7 @@ def on_message(ws, message):
 
 def on_open(ws):
     print("✅ System 100% Armed!")
-    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE (100% Bulletproof Photo Edition)**")
+    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE (100% Photo Edition)**")
     ws.send(json.dumps({"command": "start_listening", "messageId": "init_L"}))
 
 def run_ws():
@@ -98,7 +99,8 @@ def run_ws():
 # --- 4. MANUAL COMMANDS ---
 @bot.message_handler(commands=['status'])
 def send_status(message):
-    bot.reply_to(message, f"📊 **System Status**\n🛡️ Mode: 🟢 Active\n⚡ Engine: 100% Photo Interceptor")
+    now = datetime.now(IST).strftime('%H:%M:%S')
+    bot.reply_to(message, f"📊 **System Status**\n⏰ {now} IST\n🛡️ Mode: 🟢 Active\n⚡ Engine: Light-Weight Photo Interceptor")
 
 @bot.message_handler(commands=['test'])
 def manual_test(message):
