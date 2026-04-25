@@ -1,4 +1,4 @@
-import telebot, os, websocket, json, threading, time
+import telebot, os, websocket, json, threading, time, base64
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from flask import Flask
 from datetime import datetime
@@ -9,45 +9,62 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID') 
 IST = pytz.timezone('Asia/Kolkata')
 
-print("⚡ Initializing Titanium Event-Driven Engine (Ultra Way)...")
+print("⚡ Initializing Titanium Omni-Decoder Engine (Ultra Level)...")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-# Prevent spamming alerts
 recent_motions = {}
 COOLDOWN_SECONDS = 30 
 
 @app.route('/')
 def health():
-    return f"Titanium Event Engine Online | Time: {datetime.now(IST).strftime('%H:%M:%S')}", 200
+    return f"Titanium Ultra Engine Online | Time: {datetime.now(IST).strftime('%H:%M:%S')}", 200
 
 def get_dashboard_markup():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("📹 View Full Video (Open Eufy)", url="https://mysecurity.eufylife.com/"))
     return markup
 
-# 🕵️‍♂️ THE INSTANT INTERCEPTOR
+# 🕵️‍♂️ THE ULTRA OMNI-DECODER
 def handle_picture_event(sn, pic_data):
-    """Fires the millisecond the picture arrives on the websocket"""
+    """Parses ANY image format Eufy throws at it (String, Buffer, or Array)"""
     ts = datetime.now(IST).strftime('%H:%M:%S')
     try:
         img_bytes = None
-        # Extract the Node.js Buffer array
+
+        # Format 1: Node.js Buffer dict -> {"type": "Buffer", "data": [...]}
         if isinstance(pic_data, dict) and 'data' in pic_data:
-            img_bytes = bytes(pic_data['data'])
-        elif isinstance(pic_data, list):
+            raw_data = pic_data['data']
+            if isinstance(raw_data, list):
+                img_bytes = bytes(raw_data)
+            elif isinstance(raw_data, str):
+                pic_data = raw_data # Pass to string handler below
+
+        # Format 2: Direct List of Integers
+        if not img_bytes and isinstance(pic_data, list):
             img_bytes = bytes(pic_data)
-        
-        if img_bytes and len(img_bytes) > 1000:
+
+        # Format 3: Base64 String (THIS IS WHAT CAUSED YOUR ERROR)
+        if not img_bytes and isinstance(pic_data, str):
+            # Clean up the string if it has a web prefix
+            if "base64," in pic_data:
+                pic_data = pic_data.split("base64,")[1]
+            img_bytes = base64.b64decode(pic_data)
+
+        # 📤 UPLOAD TO TELEGRAM
+        if img_bytes and len(img_bytes) > 500:
             bot.send_photo(
                 CHAT_ID, 
                 img_bytes, 
-                caption=f"📸 **EVIDENCE SECURED**\n⏰ Time: {ts}\n💾 *Video is on Camera SD Card.*", 
+                caption=f"📸 **ULTRA EVIDENCE SECURED**\n⏰ Time: {ts}\n💾 *Video saved to Camera SD Card.*", 
                 reply_markup=get_dashboard_markup()
             )
-            print(f"✅ Intercepted and sent photo successfully at {ts}")
+            print(f"✅ Photo decoded and sent successfully at {ts}")
+        else:
+            bot.send_message(CHAT_ID, f"⚠️ Payload empty or too small.")
+            
     except Exception as e:
-        bot.send_message(CHAT_ID, f"⚠️ Error processing intercepted photo: {e}")
+        bot.send_message(CHAT_ID, f"⚠️ **Decoding Error:** {str(e)}")
 
 # --- 2. THE WEBSOCKET LISTENER ---
 def on_message(ws, message):
@@ -58,26 +75,25 @@ def on_message(ws, message):
         prop_name = evt.get("name", "").lower()
         sn = evt.get("serialNumber")
 
-        # ACTION 1: Motion Detected
+        # EVENT A: Motion Trigger
         if any(x in prop_name for x in ["motion", "person", "ring"]) or evt_type == "motion detected":
             now = time.time()
             if sn not in recent_motions or (now - recent_motions[sn]) > COOLDOWN_SECONDS:
                 recent_motions[sn] = now
                 ts = datetime.now(IST).strftime('%H:%M:%S')
                 try: 
-                    bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED**\n📹 Cam: `{sn}`\n⏰ {ts} IST\n⏳ Awaiting instantaneous Push payload...")
+                    bot.send_message(CHAT_ID, f"🚨 **MOTION DETECTED**\n📹 Cam: `{sn}`\n⏰ {ts} IST\n⏳ Awaiting Push Payload...")
                 except: pass
 
-        # ACTION 2: The "Ultra Way" Photo Intercept
-        # We listen directly for the property change, bypassing the REST API entirely.
+        # EVENT B: The Intercept
         if evt_type == "property changed" and prop_name in ["picture", "thumbnail", "image"]:
             pic_value = evt.get("value")
             if pic_value:
-                # Send the processing to a background thread so we don't block the socket
+                # Send to our Omni-Decoder in the background
                 threading.Thread(target=handle_picture_event, args=(sn, pic_value)).start()
 
 def on_open(ws):
-    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE (Ultra Event-Driven Edition)**")
+    bot.send_message(CHAT_ID, "🟢 **TITANIUM SYSTEM ONLINE (Ultra Omni-Decoder Edition)**")
     ws.send(json.dumps({"command": "start_listening", "messageId": "init_L"}))
 
 def run_ws():
@@ -96,7 +112,7 @@ def run_ws():
 # --- 3. MANUAL COMMANDS ---
 @bot.message_handler(commands=['status'])
 def send_status(message):
-    bot.reply_to(message, f"📊 **System Status**\n🛡️ Mode: 🟢 Active\n⚡ Engine: Event-Driven Push Interceptor")
+    bot.reply_to(message, f"📊 **System Status**\n🛡️ Mode: 🟢 Active\n⚡ Engine: Ultra Omni-Decoder")
 
 if __name__ == "__main__":
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True).start()
